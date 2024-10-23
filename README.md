@@ -243,40 +243,6 @@ If you have some problem in the configuration step with Anki, open Anki annd `To
         ]
     }
 
-
-## Customization
-To have coloured tags for the flashcards one, you can use this in `obsidian.css`. It's not added directly in the plugin, to do not mess with your styles 😊. 
-
-```css
-.tag {
-  color: var(--text-normal);
-  background-color: var(--text-accent);
-  border: none;
-  font-size: 11px;
-  padding: 1px 8px;
-  text-align: center;
-  text-decoration: none;
-  margin: 0px 0px;
-  cursor: pointer;
-  border-radius: 14px;
-  display: inline;
-  vertical-align: middle;
-}
-
-.tag:hover {
-  color: var(--text-normal);
-  background-color: var(--text-accent-hover);
-}
-
-.tag[href="#card"] {
-  background-color: #821515;
-}
-
-.tag[href="#card-reverse"] {
-  background-color: #821515;
-}
-```
-
 ## How to install
 
 1. [Install](obsidian://show-plugin?id=flashcards-obsidian) this plugin on Obsidian:
