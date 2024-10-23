@@ -1,10 +1,10 @@
 {
-  "id": "flashcards-obsidian",
-  "name": "Flashcards",
-  "version": "1.6.5",
+  "id": "flashcards-v2",
+  "name": "Flashcards-v2",
+  "version": "2.0.0",
   "minAppVersion": "1.4.0",
-  "description": "Anki integration",
-  "author": "Alex Colucci",
-  "authorUrl": "https://github.com/reuseman",
+  "description": "Sync Obsidian notes, tags flashcards to Anki",
+  "author": "xRyul",
+  "authorUrl": "https://github.com/xRyul",
   "isDesktopOnly": true
 }
