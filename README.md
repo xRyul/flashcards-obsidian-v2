@@ -245,22 +245,11 @@ If you have some problem in the configuration step with Anki, open Anki annd `To
 
 ## How to install
 
-1. [Install](obsidian://show-plugin?id=flashcards-obsidian) this plugin on Obsidian:
-
-   - Open Settings > Community plugins
-   - Make sure Safe mode is off
-   - Click Browse community plugins
-   - Search for "**Flashcards**"
-   - Click Install
-   - Once installed, close the community plugins window and activate the newly installed plugin
-
-2. Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) on Anki
-   - Tools > Add-ons -> Get Add-ons...
-   - Paste the code **2055492159** > Ok
-
+1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin -> Open Obsidian -> CMD+P -> "BRAT: Add a beta plugin for testing" -> Paste thhe URL of this fork `https://github.com/xRyul/flashcards-obsidian-v2` -> OK
+2. Open Anki -> Tools > Add-ons -> Get Add-ons... -> Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) -> Paste the code **2055492159** > Ok
 3. Open the settings of the plugin, and while Anki is opened press "**Grant Permission**"
 
 ## Thanks
 
 - @reuseman for the initial plugins
-- @chaecramb for the fix.
+- @chaecramb for the fix
