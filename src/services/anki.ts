@@ -1,3 +1,4 @@
+// /services/anki.ts
 import { Card } from "src/entities/card";
 import {
   sourceField,
@@ -80,13 +81,27 @@ export class Anki {
 
   public async addCards(cards: Card[]): Promise<number[]> {
     const notes: any = [];
-
+    
     cards.forEach((card) => notes.push(card.getCard(false)));
 
-    return this.invoke("addNotes", 6, {
-      notes: notes,
-    });
-  }
+    try {
+        const result = await this.invoke("addNotes", 6, {
+            notes: notes,
+        });
+        
+        // Update the cards with their new IDs
+        result.forEach((id: number, index: number) => {
+            if (id !== null) {
+                cards[index].id = id;
+            }
+        });
+        
+        return result;
+    } catch (error) {
+        console.error("Error adding cards:", error);
+        throw error;
+    }
+}
 
   /**
    * Given the new cards with an optional deck name, it updates all the cards on Anki.
@@ -97,38 +112,71 @@ export class Anki {
    * @param deckName the new deck name.
    */
   public async updateCards(cards: Card[]): Promise<any> {
-    let updateActions: any[] = [];
-
-    // Unfortunately https://github.com/FooSoft/anki-connect/issues/183
-    // This means that the delta from the current tags on Anki and the generated one should be added/removed
-    // That's what the current approach does, but in the future if the API it is made more consistent
-    //  then mergeTags(...) is not needed anymore
-    const ids: number[] = [];
+    const updateActions: any[] = [];
 
     for (const card of cards) {
-      updateActions.push({
-        action: "updateNoteFields",
-        params: {
-          note: card.getCard(true),
-        },
-      });
+      if (!card.id) {
+        console.warn('Skipping update for card without ID:', card);
+        continue;
+      }
 
-      updateActions = updateActions.concat(
-        this.mergeTags(card.oldTags, card.tags, card.id)
-      );
-      ids.push(card.id);
+      try {
+        // First verify the note exists
+        const noteInfo = await this.invoke("notesInfo", 6, {
+          notes: [card.id]
+        });
+
+        if (noteInfo && noteInfo.length > 0) {
+          // Update fields
+          updateActions.push({
+            action: "updateNoteFields",
+            params: {
+              note: {
+                id: card.id,
+                fields: card.fields
+              }
+            }
+          });
+
+          // Update tags
+          if (card.tags && Array.isArray(card.tags)) {
+            updateActions.push({
+              action: "clearNotesTags",
+              params: {
+                notes: [card.id]
+              }
+            });
+
+            if (card.tags.length > 0) {
+              updateActions.push({
+                action: "addTags",
+                params: {
+                  notes: [card.id],
+                  tags: card.tags.join(" ")
+                }
+              });
+            }
+          }
+        } else {
+          console.warn(`Note with ID ${card.id} not found in Anki`);
+        }
+      } catch (error) {
+        console.error(`Error updating card ${card.id}:`, error);
+      }
     }
 
-    // Update deck
-    updateActions.push({
-      action: "changeDeck",
-      params: {
-        cards: ids,
-        deck: cards[0].deckName,
-      },
-    });
+    if (updateActions.length > 0) {
+      try {
+        return await this.invoke("multi", 6, {
+          actions: updateActions
+        });
+      } catch (error) {
+        console.error("Error executing update actions:", error);
+        throw error;
+      }
+    }
 
-    return this.invoke("multi", 6, { actions: updateActions });
+    return Promise.resolve({});
   }
 
   public async changeDeck(ids: number[], deckName: string) {
@@ -304,7 +352,7 @@ export class Anki {
           },
         ],
       },
-      
+
     }
 
     const obsidianSpaced = {

@@ -1,3 +1,4 @@
+// /gui/settings-tab.ts
 import { Notice, PluginSettingTab, Setting } from "obsidian";
 import { Anki } from "src/services/anki";
 import { escapeRegExp } from "src/utils";
