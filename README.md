@@ -7,7 +7,7 @@ This is fork of original "[Flashcards](https://github.com/reuseman/flashcards-ob
 
 ## Features
 
-🗃️ Simple flashcards with **#card**  
+🗃️ Simple flashcards with **#card**: ability to add outlines and multilines. 
 🎴 Reversed flashcards with **#card-reverse** or **#card/reverse**  
 📅 Spaced-only cards with **#card-spaced** or **#card/spaced**  
 ✍️ Inline style with **Question::Answer**  
@@ -36,16 +36,10 @@ The following is a demo where the three main operations are shown:
 
 ## How to use it?
 
-
-## Requirements
-First, Anki and [AnkiConnect](https://ankiweb.net/shared/info/2055492159) should be running and configured properly, as explained [here](https://github.com/reuseman/flashcards-obsidian/#how-to-install). 
-
-## Write cards
-At the current time the hashtag is the way to define them. It can be customized in the settings, but the default one is `#card`.
-Here there is an example file ([Preview](https://github.com/reuseman/flashcards-obsidian/blob/main/docs/demo.md) | [Markdown](https://raw.githubusercontent.com/reuseman/flashcards-obsidian/main/docs/demo.md)).
-
-### #card hashtag
-To mark a line or a heading as the **front** of a card just write a **#card** tag after it. On a new line write the **back** of the card. And remember to space things out!
+1. Define a hashtag - default is #card
+2. Front: To define the front of the card simply add #card at the end
+ of the line. 
+3. Back: Back will be automatically created until a linebreak
 
 ```markdown
 # This could be a title
