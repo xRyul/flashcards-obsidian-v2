@@ -457,14 +457,27 @@ export class Parser {
   }
 
   private parseLine(str: string, vaultName: string) {
-    return this.htmlConverter.makeHtml(
-      this.mathToAnki(
-        this.substituteObsidianLinks(
-          this.substituteImageLinks(this.substituteAudioLinks(str)),
-          vaultName
-        )
-      )
+    // Step 1: Substitute images and audio links first
+    // substituteImageLinks now generates <img ...> tags directly
+    let processedStr = this.substituteImageLinks(this.substituteAudioLinks(str));
+
+    // Step 2: Substitute obsidian links and math
+    processedStr = this.mathToAnki(
+        this.substituteObsidianLinks(processedStr, vaultName)
     );
+
+    // Step 3: Convert remaining Markdown to HTML using showdown
+    let html = this.htmlConverter.makeHtml(processedStr);
+
+    // Step 4: Clean up potential duplicate image embeds inserted by showdown/Obsidian
+    // This regex finds our generated <img ...> tag followed immediately
+    // by the unwanted <div class="internal-embed...">...</div> structure
+    // and replaces the whole match with just our img tag.
+    // It uses a non-greedy match for the div content.
+    const cleanupRegex = /(<img [^>]+>)<div class="internal-embed.*?<\/div>/gi;
+    html = html.replace(cleanupRegex, '$1'); // Replace with the first capture group (our img tag)
+
+    return html;
   }
 
   private getImageLinks(str: string) {
@@ -508,8 +521,21 @@ export class Parser {
   }
 
   private substituteImageLinks(str: string): string {
-    str = str.replace(this.regex.wikiImageLinks, "<img src='$1'>");
-    str = str.replace(this.regex.markdownImageLinks, "<img src='$1'>");
+    // Wiki links
+    str = str.replace(this.regex.wikiImageLinks, (match, filename, width, height) => {
+        let attrs = `src='${filename}'`;
+        if (width)  attrs += ` width='${width}'`;
+        if (height) attrs += ` height='${height}'`; // Only add height if xHeight is present
+        return `<img ${attrs}>`;
+    });
+
+    // Markdown links
+    str = str.replace(this.regex.markdownImageLinks, (match, filepath, width, height) => {
+        let attrs = `src='${decodeURIComponent(filepath)}'`;
+        if (width)  attrs += ` width='${width}'`;
+        if (height) attrs += ` height='${height}'`; // Only add height if xHeight is present
+        return `<img ${attrs}>`;
+    });
 
     return str;
   }

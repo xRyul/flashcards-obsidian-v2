@@ -34,9 +34,9 @@ export class Regex {
 
     // Supported images https://publish.obsidian.md/help/How+to/Embed+files
     this.wikiImageLinks =
-      /!\[\[(.*\.(?:png|jpg|jpeg|gif|bmp|svg|tiff)).*?\]\]/gim;
+      /!\[\[([^|\n\]]+\.(?:png|jpg|jpeg|gif|bmp|svg|tiff|webp|avif))(?:\|(\d+)(?:x(\d+))?)?\]\]/gim;
     this.markdownImageLinks =
-      /!\[\]\((.*\.(?:png|jpg|jpeg|gif|bmp|svg|tiff)).*?\)/gim;
+      /!\[(?:.*?)?\]\(([^|\n\)]+\.(?:png|jpg|jpeg|gif|bmp|svg|tiff|webp|avif))(?:\|(\d+)(?:x(\d+))?)?\)/gim;
 
     this.wikiAudioLinks =
       /!\[\[(.*\.(?:mp3|webm|wav|m4a|ogg|3gp|flac)).*?\]\]/gim;

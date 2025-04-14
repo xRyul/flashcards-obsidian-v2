@@ -1,4 +1,3 @@
-
 # Flashcards-v2
 
 Sync Obsidian notes to Anki.
@@ -113,7 +112,8 @@ Just edit the card in Obsidian, and run the command above.
 **NOTE: Make certain that when you want to update the BROWSE window of Anki is closed.** 
 Unfortunately, this is a bug that is not my under control, but it's a problem tied up with the Anki APIs I am using.
 
-### Delete
+### Delete (Original Method)
+**(Note: This is an alternative method. See "Deleting Cards Directly from Anki" below for newer commands that directly remove cards from Anki and cleanup IDs.)**
 Delete the content of the card in Obsidian, but without deleting the ID. The plugin will take care of it. So for example
 ```markdown
 ## This is the front of the card to delete #card    
@@ -124,6 +124,25 @@ This is what you should leave:
 ```markdown
 ^1607361487244
 ```
+Then run the `Flashcards: generate for the current file` command.
+
+### Deleting Cards Directly from Anki
+
+This plugin provides two commands to delete cards directly from Anki and simultaneously clean up the corresponding ID blocks in your Obsidian notes:
+
+1.  **Delete Selected Card(s) from Anki Only:**
+    *   Select the text in your Obsidian note that contains the Anki card ID(s) you want to delete. Supported ID formats are `^1234567890` and `%%anki ID: 1234567890%%`.
+    *   Open the Command Palette (`Ctrl+P` or `Cmd+P`).
+    *   Run the command `Flashcards: Delete selected card(s) from Anki only`.
+    *   The corresponding notes will be deleted from Anki, and the ID blocks within your selection will be removed from the Obsidian note.
+
+2.  **Delete All Cards in Current File from Anki Only:**
+    *   Open the Obsidian note containing the cards you wish to remove from Anki.
+    *   Open the Command Palette (`Ctrl+P` or `Cmd+P`).
+    *   Run the command `Flashcards: Delete all cards in current file from Anki only`.
+    *   The plugin will find all Anki IDs (`^...` or `%%...%%`) in the file, delete the corresponding notes from Anki, and remove all found ID blocks from the Obsidian note, preserving the note's layout.
+
+**Note:** These commands *only* affect Anki and the ID blocks in Obsidian. They do not delete the original card content (front/back) from your Obsidian note. This allows you to keep the information in Obsidian even after removing the flashcard from Anki.
 
 ## Features
 

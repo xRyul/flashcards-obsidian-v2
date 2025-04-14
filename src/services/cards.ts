@@ -402,4 +402,25 @@ export class CardsService {
 
     return [];
   }
+
+  /**
+   * Deletes specific cards from Anki using their IDs, without modifying the Obsidian note.
+   * @param cardIds An array of Anki note IDs to delete.
+   */
+  public async deleteCardsFromAnkiOnly(cardIds: number[]): Promise<boolean> {
+    if (!cardIds || cardIds.length === 0) {
+      new Notice("No valid Anki card IDs provided for deletion.", noticeTimeout);
+      return false;
+    }
+    try {
+      // AnkiConnect's deleteNotes handles arrays directly
+      await this.anki.deleteCards(cardIds);
+      new Notice(`Deleted ${cardIds.length} card(s) from Anki: ${cardIds.join(', ')}.`, noticeTimeout);
+      return true;
+    } catch (err) {
+      console.error("Error deleting cards from Anki:", err);
+      new Notice(`Error: Could not delete cards [${cardIds.join(', ')}] from Anki. Check AnkiConnect connection.`, noticeTimeout);
+      return false;
+    }
+  }
 }
