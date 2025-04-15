@@ -138,7 +138,8 @@ describe('CardsService', () => {
                 ankiNotes,
                 ankiNotes,
                 [parsedCard],
-                [] // No IDs in file initially
+                [],
+                []
             );
             
             // Verify ID was recovered and card was updated
@@ -204,7 +205,8 @@ describe('CardsService', () => {
                 ankiNotes,
                 ankiNotes,
                 [parsedCard],
-                [67890] // ID already found in file
+                [67890],
+                []
             );
             
             // Verify ID remained the same
@@ -260,7 +262,8 @@ describe('CardsService', () => {
                 ankiNotes,
                 ankiNotes,
                 [parsedCard],
-                [] // No IDs in file
+                [],
+                []
             );
             
             // Card should remain without an ID

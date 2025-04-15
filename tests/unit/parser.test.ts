@@ -10,13 +10,13 @@ const mockSettings: ISettings = {
     contextAwareMode: false, // Simplify test by disabling context
     sourceSupport: false,
     codeHighlightSupport: false,
-    inlineID: false,
     contextSeparator: ' > ',
     deck: 'Default',
     folderBasedDeck: false,
+    folder: "",
     inlineSeparator: '::',
     inlineSeparatorReverse: ':::',
-    defaultAnkiTag: '',
+    defaultAnkiTag: 'obsidian',
     ankiConnectPermission: true, // Assuming permission granted
 };
 

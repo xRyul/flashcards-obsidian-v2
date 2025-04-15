@@ -25,6 +25,7 @@ export class CardsService {
   private totalOffset: number;
   private file: string;
   private notifications: string[];
+  private idsToRemoveFromFile: Set<number>;
 
   constructor(app: App, settings: ISettings) {
     this.app = app;
@@ -32,6 +33,7 @@ export class CardsService {
     this.regex = new Regex(this.settings);
     this.parser = new Parser(this.regex, this.settings);
     this.anki = new Anki();
+    this.idsToRemoveFromFile = new Set<number>();
   }
 
   public async execute(activeFile: TFile): Promise<string[]> {
@@ -57,13 +59,22 @@ export class CardsService {
     // Parse frontmatter
     const frontmatter = fileCachedMetadata.frontmatter;
     let deckName = "";
-    if (frontmatter["cards-deck"]) {
+
+    if (frontmatter && frontmatter["cards-deck"]) { // Check frontmatter exists AND has the key
       deckName = frontmatter["cards-deck"];
-    } else if (this.settings.folderBasedDeck && activeFile.parent.path !== "/") {
-      // If the current file is in the path "programming/java/strings.md" then the deck name is "programming::java"
-      deckName = activeFile.parent.path.split("/").join("::");
     } else {
-      deckName = this.settings.deck;
+        // Deck not specified in frontmatter (either no frontmatter or key missing)
+        if (this.settings.folderBasedDeck && activeFile.parent.path !== "/") {
+            // Using folder-based deck name
+            deckName = activeFile.parent.path.split("/").join("::");
+        } else {
+            // Using default deck name
+            deckName = this.settings.deck;
+            // Show notification *only* if frontmatter exists but is missing the key
+            if (frontmatter && !frontmatter["cards-deck"]) {
+                 new Notice(`YAML frontmatter is missing the 'cards-deck' key. Using default deck: "${deckName}". Add 'cards-deck: yourDeckName' to the file's frontmatter to specify a deck.`, noticeTimeout * 2);
+            }
+        }
     }
 
     try {
@@ -100,7 +111,8 @@ export class CardsService {
         allAnkiNotesInDeck, // Use complete list for ID recovery
         ankiNotesForIDsInFile, // Use list for IDs in file for update checks
         cards,
-        ankiIDsInFile // Pass the set of IDs found in the file
+        ankiIDsInFile, // Pass the set of IDs found in the file
+        ankiBlocks // Pass the original blocks for potential removal
       );
       const cardIds: number[] = this.getCardsIds(ankiNotesForIDsInFile, cards);
       const cardsToDelete: number[] = this.parser.getCardsToDelete(this.file);
@@ -140,7 +152,23 @@ export class CardsService {
         }
       }
 
-      // Update file
+      // --- Final Cleanup: Remove obsolete ID blocks ---
+      if (this.idsToRemoveFromFile.size > 0) {
+        console.log("Removing obsolete Anki ID blocks from file content:", Array.from(this.idsToRemoveFromFile));
+        const lines = this.file.split('\n');
+        const cleanedLines = lines.filter(line => {
+            const idMatch = line.trim().match(/^<!-- ankiID: (\d+) -->$/);
+            return !(idMatch && this.idsToRemoveFromFile.has(Number(idMatch[1])));
+        });
+        const cleanedContent = cleanedLines.join('\n');
+        if (cleanedContent !== this.file) {
+            this.file = cleanedContent;
+            this.updateFile = true; // Ensure file is saved if changes were made
+        }
+      }
+      // --- End Final Cleanup ---
+
+      // Update file if any changes occurred (new IDs written, old IDs removed)
       if (this.updateFile) {
         try {
           this.app.vault.modify(activeFile, this.file);
@@ -328,7 +356,8 @@ export class CardsService {
     allAnkiNotesInDeck: any, // Complete list for ID recovery
     ankiNotesForIDsInFile: any, // List for IDs in file for update checks
     generatedCards: Card[], // All cards parsed from the file
-    ankiIDsInFile: number[] // Explicit list of IDs found in the file by getAnkiIDsBlocks
+    ankiIDsInFile: number[], // Explicit list of IDs found in the file by getAnkiIDsBlocks
+    ankiBlocks: RegExpMatchArray[] // Pass the original blocks (though not used for direct removal here anymore)
   ) {
     let cardsToCreate: Card[] = [];
     const cardsToUpdate: Card[] = [];
@@ -351,8 +380,17 @@ export class CardsService {
           )[0];
           
           if (!ankiCard) {
-            // ID in file, but card missing in Anki. Treat as error/warning.
-            cardsNotInAnki.push(flashcard);
+            // ID in file, but card missing in Anki (e.g., deck deleted).
+            const originalId = flashcard.id; // Store original ID
+            
+            // *** Mark for later removal, DO NOT remove from this.file here ***
+            this.idsToRemoveFromFile.add(originalId);
+
+            // Treat as needing creation in the current target deck.
+            console.warn(`Card with old ID ${originalId} not found in Anki. Marking block for removal and queuing for creation in deck '${flashcard.deckName}'.`);
+            flashcard.id = -1; // Reset ID, needs a new one
+            flashcard.inserted = false; // Mark as not inserted
+            cardsToCreate.push(flashcard); // Add to creation list
           } else if (!flashcard.match(ankiCard)) {
             // ID in file and Anki, content differs -> needs update.
             flashcard.oldTags = ankiCard.tags;

@@ -9,7 +9,6 @@ export class SettingsTab extends PluginSettingTab {
     const plugin = (this as any).plugin;
 
     containerEl.empty();
-    containerEl.createEl("h1", { text: "Flashcards - Settings" });
 
     const description = createFragment()
     description.append(
@@ -55,8 +54,8 @@ export class SettingsTab extends PluginSettingTab {
     containerEl.createEl("h2", { text: "General" });
 
     new Setting(containerEl)
-      .setName("Context-aware mode")
-      .setDesc("Add the ancestor headings to the question of the flashcard.")
+      .setName("Heading breadcrumbs")
+      .setDesc("Add the path of headings above the card to the question (e.g., Chapter > Section > Question).")
       .addToggle((toggle) =>
         toggle.setValue(plugin.settings.contextAwareMode).onChange((value) => {
           plugin.settings.contextAwareMode = value;
@@ -86,15 +85,6 @@ export class SettingsTab extends PluginSettingTab {
             plugin.settings.codeHighlightSupport = value;
             plugin.saveData(plugin.settings);
           })
-      );
-    new Setting(containerEl)
-      .setName("Inline ID support")
-      .setDesc("Add ID to end of line for inline cards.")
-      .addToggle((toggle) =>
-        toggle.setValue(plugin.settings.inlineID).onChange((value) => {
-          plugin.settings.inlineID = value;
-          plugin.saveData(plugin.settings);
-        })
       );
 
     new Setting(containerEl)
@@ -214,7 +204,6 @@ export class SettingsTab extends PluginSettingTab {
             plugin.saveData(plugin.settings);
           });
       });
-
 
   }
 }

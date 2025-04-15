@@ -29,7 +29,7 @@
 - **Core Dependencies**:
   - `obsidian`: Obsidian API package
   - `showdown`: For Markdown to HTML conversion
-  - TypeScript and related build tools
+  - TypeScript and related build tools (Targeting ES2018)
 - **Dev Dependencies**:
   - TypeScript compiler
   - Bundling tools (esbuild)
