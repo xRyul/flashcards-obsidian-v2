@@ -22,20 +22,10 @@ This is fork of original "[Flashcards](https://github.com/reuseman/flashcards-ob
 ⚓ Support for **reference to note**  
 📟 Support for **code syntax highlight**
 
-
-## How it works?
-
-The following is a demo where the three main operations are shown:
-
-1. **Insertion** of cards;
-2. **Update** of cards;
-3. **Deletion** of cards.
-
 ## How to use it?
 
 1. Define a hashtag - default is #card
-2. Front: To define the front of the card simply add #card at the end
- of the line. 
+2. Front: To define the front of the card simply add #card at the end of the line. 
 3. Back: Back will be automatically created until a linebreak
 
 ```markdown
@@ -58,23 +48,19 @@ But this time without the heading.
 ## This is another way to define the front
 #card 
 This style is usefull to avoid the hashtags when referencing in Obsidian
-
 ```
 
 ### Inline style with ::
 ```markdown
-# This could be a title
-
-All of these works:
 My question::My answer
 My question:: My answer
 My question ::My Answer
 My question :: My answer
-
-You can even use it in lists:
 - My list item question:: My list item answer
+```
 
-Multi-line answers are also supported:
+Inline style with multiline:
+```markdown
 Question::Answer Line 1
 Answer Line 2
 (Any subsequent non-empty lines are part of the answer)
@@ -83,7 +69,6 @@ Answer Line 2
 #### Reverse
 To create a reversed card with the inline style just use `:::`. Multi-line answers work the same way.
 ```markdown
-All of these works:
 My question:::My answer
 My question::: My answer
 My question :::My Answer
@@ -91,6 +76,7 @@ My question ::: My answer
 
 Question:::Answer Line 1
 Answer Line 2
+Answer Line 3
 ```
 
 ### Cloze
@@ -99,24 +85,21 @@ This is a way to define a ==cloze== by using the Obsidian highlight syntax in or
 The alternative is this type of {cloze} that is totally equal to {1:cloze}. With the number you can specify the order {2:later cloze}.
 ```
 
-### Spaced with #card-spaced hashtag
+### Spaced with `#card-spaced` or `#card/spaced` hashtag
 ```markdown
 This could be a beautifull quote that you want to see once in a while #card-spaced
 ```
 
-Optionally, you can consider the `#card/spaced` alternative to use obsidian hierarchical tags.
 
 ## Generate cards on Anki
 1. In Obsidian, open the file where you have the flashcards
-2. Then to insert/update/delete just run inside Obsidian the command `Ctrl+p` and execute the command `Flashcards: generate for the current file`
+2. Then to insert/update/delete just run inside Obsidian the command `Ctrl+p` and execute the command `Flashcards: Generate for the current file`
 
 ### Insert
 Write the cards and just run the command above. The insertion operation will add cards on Anki. In Obsidian, it will add an HTML comment containing the Anki card ID on the line immediately following **all** of the card's content (including any multi-line answers for both `#card` and `::`/`:::` styles). This ID is used to track the card for updates and deletions.
 
 Example (`#card`):
 ```markdown
-# My Title
-
 Question? #card
 Answer line 1.
 Answer line 2.
@@ -131,9 +114,7 @@ My Answer Line 2
 ```
 
 ### Update
-Just edit the card in Obsidian, and run the command above.   
-**NOTE: Make certain that when you want to update the BROWSE window of Anki is closed.** 
-Unfortunately, this is a bug that is not my under control, but it's a problem tied up with the Anki APIs I am using.
+Just edit the card in Obsidian, and run the command `Flashcards: Generate for the current file` again.
 
 ### Deleting Cards Directly from Anki
 
@@ -271,7 +252,4 @@ If you have some problem in the configuration step with Anki, open Anki annd `To
 2. Open Anki -> Tools > Add-ons -> Get Add-ons... -> Install [AnkiConnect](https://ankiweb.net/shared/info/2055492159) -> Paste the code **2055492159** > Ok
 3. Open the settings of the plugin, and while Anki is opened press "**Grant Permission**"
 
-## Thanks
 
-- @reuseman for the initial plugins
-- @chaecramb for the fix
