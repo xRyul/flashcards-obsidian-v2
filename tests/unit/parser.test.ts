@@ -102,5 +102,55 @@ describe('Parser Service', () => {
         expect(card4?.fields.Back).toContain('It seems to work3');
     });
 
+    it('should correctly parse inline list item cards with subsequent content', () => {
+        const fileContent = `
+- First item::Answer 1
+(extra info 1)
+
+- Second item::Answer 2
+(extra info 2)
+
+Some other text.
+`;
+        const deckName = 'InlineListTestDeck';
+        const vaultName = 'TestVault';
+        const noteName = 'InlineListTestNote';
+        const globalTags: string[] = [];
+
+        const resultCards = parser.generateFlashcards(
+            fileContent,
+            deckName,
+            vaultName,
+            noteName,
+            globalTags
+        );
+
+        // Check total number of cards found
+        expect(resultCards).toHaveLength(2);
+
+        // Card 1
+        const card1 = resultCards[0];
+        expect(card1).toBeDefined();
+        expect(card1.initialContent).toBe('First item'); // Check the raw extracted question part
+        expect(card1.id).toBe(-1);
+        expect(card1.inserted).toBe(false);
+        // Check parsed HTML (adjust expectations based on actual parseLine output)
+        expect(card1.fields.Front).toBe('<p>First item</p>');
+        // Use toContain for the back field to be less brittle with HTML whitespace/structure
+        expect(card1.fields.Back).toContain('Answer 1');
+        expect(card1.fields.Back).toContain('(extra info 1)');
+
+        // Card 2
+        const card2 = resultCards[1];
+        expect(card2).toBeDefined();
+        expect(card2.initialContent).toBe('Second item'); // Check the raw extracted question part
+        expect(card2.id).toBe(-1);
+        expect(card2.inserted).toBe(false);
+        expect(card2.fields.Front).toBe('<p>Second item</p>');
+        // Use toContain for the back field
+        expect(card2.fields.Back).toContain('Answer 2');
+        expect(card2.fields.Back).toContain('(extra info 2)');
+    });
+
     // Add more test cases as needed for other scenarios (inline cards, cloze, etc.)
 }); 

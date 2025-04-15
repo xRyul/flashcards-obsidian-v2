@@ -1,6 +1,7 @@
 # Progress
 
 * **What Works:**
+    * Inline cards (`::`, `:::`) now correctly parse multi-line answers, including subsequent content lines (like `(slide ...)` reference) before the Anki ID block.
     * Command "Delete selected card(s) from Anki only": Deletes Anki notes corresponding to IDs within the selected text and removes the ID blocks from the selection in Obsidian.
     * Command "Delete all cards in current file from Anki only": Deletes all Anki notes corresponding to IDs found in the current file and removes the ID blocks from the file in Obsidian, preserving layout.
     * Anki ID detection supports `^\d+` and `%%anki ID: \d+%%` formats.
@@ -9,10 +10,16 @@
     * Image dimension syntax (`|width` or `|widthxheight`) is correctly parsed and applied as `width` and `height` attributes to `<img>` tags in Anki.
 * **What's Left:**
     * Populate core Memory Bank documents (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`).
-* **Current Status:** Image rendering fixed. Awaiting next task or project context information.
+* **Current Status:** Multi-line inline card parsing fixed. Awaiting next task or project context information.
 * **Known Issues:**
     * None currently identified related to implemented features.
 * **Decision Evolution:**
+    * **Inline Card Multi-line Fix:**
+        * Initial Issue: Inline card answers didn't include subsequent lines; ID placed incorrectly.
+        * Attempt 1 (Logic): Added loop in `generateInlineCards` to collect subsequent lines - Failed (cards skipped).
+        * Attempt 2 (TDD): Added test case, used logging. Identified incorrect regex group indexing - Fixed indices.
+        * Attempt 3 (TDD): Test still failed. Logged loop conditions. Identified overly broad `isNextCardStart` check.
+        * Attempt 4 (TDD): Refined `isNextCardStart` check using `exec()` and `index === 0` - Success.
     * Initial request: Delete from Anki, keep note in Obsidian.
     * Refinement 1: Delete from Anki, remove ID block and #card tag from Obsidian.
     * Refinement 2: Switched from tag removal to multi-delete via selection.

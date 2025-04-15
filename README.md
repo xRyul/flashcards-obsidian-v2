@@ -74,17 +74,25 @@ My question ::My Answer
 My question :: My answer
 
 You can even use it in lists:
-- My question:: My answer
+- My list item question:: My list item answer
+
+Multi-line answers are also supported:
+Question::Answer Line 1
+Answer Line 2
+(Any subsequent non-empty lines are part of the answer)
 ```
 
 #### Reverse
-To create a reversed card with the inline style just use `:::`.
+To create a reversed card with the inline style just use `:::`. Multi-line answers work the same way.
 ```markdown
 All of these works:
 My question:::My answer
 My question::: My answer
 My question :::My Answer
 My question ::: My answer
+
+Question:::Answer Line 1
+Answer Line 2
 ```
 
 ### Cloze
@@ -105,15 +113,23 @@ Optionally, you can consider the `#card/spaced` alternative to use obsidian hier
 2. Then to insert/update/delete just run inside Obsidian the command `Ctrl+p` and execute the command `Flashcards: generate for the current file`
 
 ### Insert
-Write the cards and just run the command above. The insertion operation will add cards on Anki. In Obsidian, it will add an HTML comment containing the Anki card ID on the line immediately following the card's content. This ID is used to track the card for updates and deletions.
+Write the cards and just run the command above. The insertion operation will add cards on Anki. In Obsidian, it will add an HTML comment containing the Anki card ID on the line immediately following **all** of the card's content (including any multi-line answers for both `#card` and `::`/`:::` styles). This ID is used to track the card for updates and deletions.
 
-Example:
+Example (`#card`):
 ```markdown
 # My Title
 
 Question? #card
-Answer.
+Answer line 1.
+Answer line 2.
 <!-- ankiID: 1712345678901 -->
+```
+
+Example (`::`):
+```markdown
+My Inline Question::My Answer Line 1
+My Answer Line 2
+<!-- ankiID: 1712345678902 -->
 ```
 
 ### Update

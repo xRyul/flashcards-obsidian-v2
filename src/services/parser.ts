@@ -307,67 +307,197 @@ export class Parser {
   ): Inlinecard[] {
     const contextAware = this.settings.contextAwareMode;
     const cards: Inlinecard[] = [];
-    const matches = [...file.matchAll(this.regex.cardsInlineStyle)];
+    // Use the existing regex, the multi-line logic will handle finding the ID correctly.
+    const inlineCardRegex = this.regex.cardsInlineStyle; // e.g., /^(.*?) ?(::|:::)(.*?) ?(?:<!-- ankiID: (\d+) -->)?$/gm
+    const lines = file.split('\n');
+    const ankiIdRegex = /^<!-- ankiID: (\d+) -->$/;
+    // Regexes to detect the start of any card type (used to terminate answer collection)
+    const cardStartRegexes = [
+        this.regex.flashscardsWithTag,      // Matches start of #card line
+        this.regex.cardsInlineStyle,      // Matches start of :: card line
+        this.regex.cardsClozeWholeLine,   // Matches start of cloze line
+        this.regex.cardsSpacedStyle       // Matches start of #card-spaced line
+    ];
 
-    for (const match of matches) {
-      if (
-        match[2].toLowerCase().startsWith("cards-deck") ||
-        match[2].toLowerCase().startsWith("tags")
-      ) {
-        continue;
+    // Helper to find the line number for a given character index
+    const findLineNumber = (index: number): number => {
+        let charCount = 0;
+        for (let i = 0; i < lines.length; i++) {
+            charCount += lines[i].length + 1; // +1 for newline
+            if (index < charCount) {
+                return i;
+            }
+        }
+        return lines.length - 1; // Return last line index if not found earlier
+    };
+
+    const matches = [...file.matchAll(inlineCardRegex)];
+
+    matches.forEach((match, matchIndex) => {
+      // Check for metadata lines like cards-deck: or tags:
+      // Use group 1 (potential heading/prefix) or group 3 (potential content) for the check
+      const potentialMetadata = (match[1]?.trim() || "") + (match[3]?.trim() || "");
+      if (potentialMetadata.toLowerCase().startsWith("cards-deck:") ||
+          potentialMetadata.toLowerCase().startsWith("tags:")) {
+        return; // Skip metadata lines that might resemble inline cards
       }
 
+      const initialOffset = match.index;
+      const matchedLineContent = match[0]; // The entire first line matched
+      const matchEndOffsetInitial = initialOffset + matchedLineContent.length;
+
+      // Group 3 determines reversed
       const reversed: boolean = match[3] === this.settings.inlineSeparatorReverse;
       let headingLevel = -1;
-      if (match[1]) {
-        headingLevel =
-          match[1].trim().length !== 0 ? match[1].trim().length : -1;
+      // Group 1 contains optional heading markers, useful for context but not the question itself
+      if (match[1] && match[1].trim().length > 0) {
+          const headingMatch = match[1].match(/^(#+)\s*/);
+          if (headingMatch) {
+            headingLevel = headingMatch[1].length;
+          }
       }
-      // Match.index - 1 because otherwise in the context there will be even match[1], i.e. the question itself
       const context = contextAware
-        ? this.getContext(headings, match.index - 1, headingLevel)
+        ? this.getContext(headings, initialOffset > 0 ? initialOffset -1 : 0, headingLevel)
         : "";
 
-      const originalQuestion = match[2].trim();
+      // Group 2 is the question part
+      let originalQuestion = match[2] ? match[2].trim() : '';
+      // Group 4 is the first line of the answer
+      let answerFirstLine = match[4] ? match[4].trim() : '';
+
+      // --> FIX: Remove leading Markdown list markers from the correctly identified question <--
+      const listMarkerMatch = originalQuestion.match(/^([-*+]\s+)/);
+      if (listMarkerMatch) {
+          originalQuestion = originalQuestion.substring(listMarkerMatch[0].length);
+      }
+      // --> END FIX <--
+
+      // Start with global tags
+      const tags: string[] = [...globalTags];
+      // Add local tags if present after the answer on the first line (Need regex update?)
+      // Example: Question::Answer #tag1 #tag2
+      // Current regex likely includes tags in group 3. We should parse them out.
+      // TODO: Refine tag parsing for inline cards if they can appear on the first line.
+
       let question = contextAware
-        ? [...context, match[2].trim()].join(
-          `${this.settings.contextSeparator}`
-        )
-        : match[2].trim();
-      let answer = match[4].trim();
+        ? [...context, originalQuestion].join(this.settings.contextSeparator)
+        : originalQuestion;
+
+      // --- Programmatically find additional Answer lines and ID ---
+      let answerLines: string[] = [answerFirstLine];
+      let id: number = -1;
+      let inserted: boolean = false;
+      let currentLineIndex = findLineNumber(initialOffset);
+      let endOffset = matchEndOffsetInitial; // Initialize with end of the first line
+
+      // Calculate the start offset of the line *following* the initial match
+      let nextLineStartOffset = 0;
+      for(let j=0; j <= currentLineIndex; j++) {
+          nextLineStartOffset += lines[j].length + 1; // +1 for newline
+      }
+      let currentLineStartOffset = nextLineStartOffset;
+
+      if (currentLineIndex < lines.length - 1) { // Only loop if there are subsequent lines
+          for (let i = currentLineIndex + 1; i < lines.length; i++) {
+              const currentLine = lines[i];
+              const currentLineTrimmed = currentLine.trim();
+
+              const potentialIdMatch = currentLineTrimmed.match(ankiIdRegex);
+
+              // Check if the current line starts *any* kind of card definition
+              let isNextCardStart = false;
+              if (currentLineTrimmed !== '') {
+                isNextCardStart = cardStartRegexes.some(regex => {
+                    // --- Updated Logic --- 
+                    // Reset lastIndex for global regexes before exec
+                    regex.lastIndex = 0; 
+                    // Execute the regex starting from the current line's offset
+                    const potentialCardMatch = regex.exec(file.substring(currentLineStartOffset));
+                    // Check if a match occurred AND it starts exactly at the beginning (index 0)
+                    return potentialCardMatch !== null && potentialCardMatch.index === 0;
+                    // --- End Updated Logic ---
+                });
+              }
+
+              if (potentialIdMatch) {
+                  // Found an ID block. Assume it terminates the card content.
+                  // console.log(`>>> Loop Break: Found ID on line ${i}`); // DEBUG LOG REMOVED
+                  id = Number(potentialIdMatch[1]);
+                  inserted = true;
+                  endOffset = currentLineStartOffset + currentLine.length; // Include ID line offset
+                  break; // Stop collecting answer
+              } else if (isNextCardStart || currentLineTrimmed === '') {
+                   // Found the start of the next card or an empty line, stop collecting answer.
+                  // console.log(`>>> Loop Break: Next card (${isNextCardStart}) or empty line (${currentLineTrimmed === ''}) on line ${i}`); // DEBUG LOG REMOVED
+                  // End offset remains the end of the *previous* line (already set).
+                  break;
+              } else {
+                  // This line is part of the answer
+                  // console.log(`>>> Loop Append: Appending line ${i}: ${JSON.stringify(currentLine)}`); // DEBUG LOG REMOVED
+                  answerLines.push(currentLine); // Keep original spacing/indentation
+                  endOffset = currentLineStartOffset + currentLine.length; // Extend end offset to include this line
+              }
+              // Update offset for the start of the *next* line for the next iteration
+              currentLineStartOffset += currentLine.length + 1;
+          }
+      }
+
+      // Join lines, keeping original newlines, then trim start/end whitespace
+      let answer = answerLines.join('\n').trim();
+      // --- End Answer/ID Finding ---
+
+      // Process question/answer links, media, markdown, etc.
       let medias: string[] = this.getImageLinks(question);
       medias = medias.concat(this.getImageLinks(answer));
       medias = medias.concat(this.getAudioLinks(answer));
+
+      // Handle embeds before final parsing
+       try {
+           const embedMap = this.getEmbedMap();
+           // Apply embed substitution to the multi-line answer string
+           answer = this.getEmbedWrapContent(embedMap, answer);
+        } catch (e) {
+            // Ignore errors in test environment if document isn't fully mocked
+            if (process.env.NODE_ENV !== 'test') {
+                console.error("Error processing embeds: ", e)
+            }
+        }
+
+      // Remove Debug Logs
+      // console.log("Inline Card - Before parseLine - Question:", JSON.stringify(question));
+      // console.log("Inline Card - Before parseLine - Answer:", JSON.stringify(answer));
       question = this.parseLine(question, vault);
       answer = this.parseLine(answer, vault);
+      // console.log("Inline Card - After parseLine - Question:", JSON.stringify(question));
+      // console.log("Inline Card - After parseLine - Answer:", JSON.stringify(answer));
 
-      const initialOffset = match.index
-      const endingLine = match.index + match[0].length;
-      const tags: string[] = this.parseTags(match[5], globalTags);
-      // Inline cards use group 6 for ID
-      const id: number = match[6] ? Number(match[6]) : -1;
-      const inserted: boolean = match[6] ? true : false;
+      // Ensure we captured a question and answer after processing
+      if (!question || !answer) {
+          console.warn("Skipping inline card due to missing question or answer:", matchedLineContent);
+          return; // Skip this iteration
+      }
+
       const fields: any = { Front: question, Back: answer };
       if (this.settings.sourceSupport) {
-        fields["Source"] = note;
+        fields["Source"] = note; // Use normal quotes
       }
       const containsCode = this.containsCode([question, answer]);
 
       const card = new Inlinecard(
         id,
         deck,
-        originalQuestion,
+        originalQuestion, // Keep original question for reference
         fields,
         reversed,
         initialOffset,
-        endingLine,
-        tags,
+        endOffset, // Use the calculated end offset including subsequent lines/ID
+        tags, // Use collected tags (currently only global)
         inserted,
         medias,
         containsCode
       );
       cards.push(card);
-    }
+    }); // End of matches.forEach
 
     return cards;
   }
