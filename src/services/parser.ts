@@ -35,6 +35,12 @@ export class Parser {
     note: string,
     globalTags: string[] = []
   ): Card[] {
+    // Preprocess: Remove all HTML comments except <!-- ankiID: ... -->
+    file = file.replace(/<!--(?!\s*ankiID: \d+\s*-->)([\s\S]*?)-->/g, (match) => {
+      // Only keep lines that are exact ankiID comments
+      const ankiIdPattern = /^<!--\s*ankiID: \d+\s*-->$/m;
+      return match.split('\n').filter(line => ankiIdPattern.test(line)).join('\n');
+    });
     const contextAware = this.settings.contextAwareMode;
     let cards: Card[] = [];
     let headings: any = [];

@@ -121,6 +121,11 @@
         * This prevents duplicate cards when a user accidentally deletes card IDs
         * Implementation added to `CardsService.filterByUpdate` method with a new helper `addMissingIdToCard`
         * Enhanced robustness by tracking previously matched Anki cards to avoid duplicate matches
+    * **HTML Comment Parsing Restriction:** The parser now ignores all content inside HTML comments (`<!-- ... -->`) except for lines that exactly match the Anki ID pattern (`<!-- ankiID: ... -->`).
+        * **Rationale:** Prevents accidental card creation from commented-out text, cloze, or tags, as reported by users. Only ID management is allowed in comments.
+        * **Implementation:** Preprocessing step in `generateFlashcards` strips all comment content except for valid ID lines before card extraction.
+        * **Pattern:** Defensive preprocessing to enforce strict parsing boundaries.
+        * **Learnings:** Markdown/Obsidian users often use comments for annotation or disabling content; parser must be robust to such usage.
 * **Next Steps:**
     * Test the card recreation logic thoroughly in various scenarios.
     * Consider further improvements to user feedback during sync operations.

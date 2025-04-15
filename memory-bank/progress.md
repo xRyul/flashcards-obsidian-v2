@@ -14,10 +14,11 @@
 - CardsService ID recovery feature has test coverage for standard formats
 - Content-based ID recovery correctly handles cases where Anki's duplicate detection is less strict than the plugin's full content matching (prevents duplicate creation errors)
 - Code Highlight support is implemented via Anki template modification
-- **Card Recreation:** Cards with IDs in Obsidian that are missing in Anki (e.g., due to deck deletion) are now correctly queued for creation, and the obsolete ID block is reliably removed from the Obsidian note.
+.- **Card Recreation:** Cards with IDs in Obsidian that are missing in Anki (e.g., due to deck deletion) are now correctly queued for creation, and the obsolete ID block is reliably removed from the Obsidian note.
 - **Settings Defaults:** Key toggle settings (`sourceSupport`, `codeHighlightSupport`) are now enabled by default.
 - **Settings UX:** "Context-aware mode" setting renamed to "Heading breadcrumbs" with clearer description.
 - **User Feedback:** Notice added for missing `cards-deck` key in YAML frontmatter.
+- **HTML Comment Parsing Restriction:** Only `<!-- ankiID: ... -->` is recognized inside HTML comments; all other comment content is ignored for card generation. Prevents accidental card creation from commented-out text or tags.
 
 ## What's Left to Build
 - Thoroughly test card recreation logic in various edge cases.
@@ -29,6 +30,7 @@
   - Modified `filterByUpdate` to mark cards with IDs missing from Anki for creation.
   - Added a mechanism to track obsolete IDs (`idsToRemoveFromFile`).
   - Implemented a final cleanup step in `execute` to remove obsolete ID lines from the file content *after* new IDs are written, ensuring correct offsets.
+- **HTML Comment Parsing Restriction:** Implemented preprocessing in the parser to strip all comment content except valid Anki ID lines before card extraction. This ensures only ID management is allowed in comments, addressing user-reported issues with accidental card creation from commented-out content.
 - **Settings Updates:**
   - Enabled `sourceSupport` and `codeHighlightSupport` by default in `main.ts`.
   - Renamed "Context-aware mode" to "Heading breadcrumbs" and improved description in `src/gui/settings-tab.ts`.
