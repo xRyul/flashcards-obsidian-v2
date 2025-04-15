@@ -12,7 +12,7 @@ This is fork of original "[Flashcards](https://github.com/reuseman/flashcards-ob
 ✍️ Inline style with **Question::Answer**  
 ✍️ Inline style reversed with **Question:::Answer**  
 📃 Cloze with **==Highlight==** or **{Curly brackets}** or  **{2:Cloze}**   
-🧠 **Context-aware** mode  
+🧠 **Heading breadcrumbs** mode  
 🏷️ Global and local **tags**  
 
 🔢 Support for **LaTeX**  
@@ -21,6 +21,14 @@ This is fork of original "[Flashcards](https://github.com/reuseman/flashcards-ob
 🔗 Support for **Obsidian URI**  
 ⚓ Support for **reference to note**  
 📟 Support for **code syntax highlight**
+
+## Recent Updates
+- **Improved Card Recreation:** Cards are now automatically recreated if they exist in Obsidian but are missing from Anki (e.g., when decks are deleted in Anki)
+- **Enhanced ID Recovery:** The plugin now recovers missing Anki IDs by matching card content with existing cards in Anki
+- **Default Settings Improved:** "Source Support" and "Code Highlight Support" are now enabled by default
+- **Renamed Features:** "Context-aware mode" has been renamed to "Heading breadcrumbs" for clarity
+- **HTML Comment Safety:** Content inside HTML comments is now ignored for card creation (except for Anki ID comments)
+- **Better User Feedback:** Added notifications for missing configuration like the `cards-deck` key in frontmatter
 
 ## How to use it?
 
@@ -125,6 +133,10 @@ If you accidentally delete the `<!-- ankiID: ... -->` comment from your Obsidian
 - If a unique match is found based on the first field, the plugin recovers the missing Anki ID and inserts the `<!-- ankiID: ... -->` comment back into your Obsidian note.
 - If the *other* fields (like "Back" or tags) differ between the Obsidian card and the matched Anki card, the card will also be marked for update in Anki.
 - This prevents accidental duplicate card creation when IDs are removed in Obsidian.
+- The plugin will also automatically recreate cards with IDs in Obsidian that are missing from Anki (e.g., when decks are deleted in Anki).
+
+### HTML Comments
+The plugin ignores all content inside HTML comments (`<!-- ... -->`) except for lines that exactly match the Anki ID pattern (`<!-- ankiID: ... -->`). This prevents accidental card creation from commented-out text, cloze, or tags.
 
 ### Deleting Cards Directly from Anki
 
@@ -146,8 +158,8 @@ This plugin provides two commands to delete cards directly from Anki and simulta
 
 ## Features
 
-### Context-aware mode
-To make sense of notes, they should talk about a specific topic, so if you have two headings of level 1 (# heading), probably you should have two notes that talks about those topics. Moreover, the note itself is written with a tree-structure and then connected in a graph way. Based on this hypothesis, the context-aware mode creates the context in the **front** of the card. Where the context the outline of the headings in a tree structure. The demo shows is in action. This helps you out:
+### Heading breadcrumbs (formerly Context-aware mode)
+To make sense of notes, they should talk about a specific topic, so if you have two headings of level 1 (# heading), probably you should have two notes that talks about those topics. Moreover, the note itself is written with a tree-structure and then connected in a graph way. Based on this hypothesis, the heading breadcrumbs feature creates the context in the **front** of the card. Where the context the outline of the headings in a tree structure. The demo shows is in action. This helps you out:
 - **during review**, because the front will be **unique** and this helps the memory in reaching for the correct answer. If the front is repeated for multiple cards, it's impossible to remember what's in the back, it's pure randomness.
 - **during writing**, because you can write following the same structure for different topics, and cards will always be **unique**. So you do not have to think too much about the writing itself.
 
@@ -173,13 +185,13 @@ Stuff
 
 **Generated card for the Java heading**
 
-- With context-aware mode on 🟢
+- With heading breadcrumbs on 🟢
 ```
 Front: Computer Science > Languages > OOP > Java
 Back: Answer
 ```
 
-- With context-aware mode off 🔴
+- With heading breadcrumbs off 🔴
 ```
 Front: Java
 Back: Answer
@@ -227,10 +239,10 @@ tags: global-tag1 #global-tag2 [[global-tag3]]
 To add images, just [embed](https://publish.obsidian.md/help/How+to/Embed+files) them normally.
 
 ### Code highlight support
-This should be enabled in the settings. `Default: Off`
+This is enabled in the settings by default. You can disable it if needed.
 
 ### Source support
-This should be enabled in the settings. `Default: Off`    
+This is enabled in the settings by default. You can disable it if needed.    
 Note that whenever enabled, the previous cards created without the source support cannot be updated, unless you switch back. My suggestion is to stick with one mode.
 
 ### LaTeX support
@@ -260,6 +272,11 @@ $$50+2$$
     ```
 *   **Duplicate Errors During Sync:** If you encounter errors like `cannot create note because it is a duplicate` even after the ID recovery feature, it might indicate a subtle difference in how Anki checks duplicates versus the plugin's `looselyMatchesFrontField` logic (e.g., HTML normalization differences). Ensure the "Front" field content of the card in Obsidian is truly unique within the target Anki deck.
 
+*   **Missing Deck Key Notice:** If your note has YAML frontmatter but lacks the `cards-deck` key, the plugin will notify you and use the default deck. To specify a deck, add `cards-deck: My Deck Name` to your frontmatter.
+
+*   **Deleted Anki Decks:** If you delete a deck in Anki, cards in your Obsidian notes will be recreated the next time you sync. The plugin will remove the old ID blocks and add new ones automatically.
+
+*   **HTML Comments:** Content inside HTML comments will be ignored for card creation (except for Anki ID comments). This allows you to comment out text without creating unwanted cards.
 
 ## How to install
 

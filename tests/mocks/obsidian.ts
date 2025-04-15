@@ -12,7 +12,13 @@ export const htmlToMarkdown = (html: string): string => {
 };
 
 // Add mocks for other Obsidian functions/classes if needed by other tests
-// export const Notice = jest.fn().mockImplementation(() => {
-//   // Mock implementation for Notice
-// });
+export const Notice = jest.fn().mockImplementation((message: string, timeout?: number) => {
+  // Mock implementation for Notice
+  return {
+    message,
+    timeout,
+    setMessage: jest.fn(),
+    hide: jest.fn()
+  };
+});
 // export const App = jest.fn()...; 

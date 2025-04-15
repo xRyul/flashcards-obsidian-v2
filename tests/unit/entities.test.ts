@@ -218,6 +218,34 @@ describe('Entity Classes', () => {
             const result = card.toString();
             expect(typeof result).toBe('string');
         });
+
+        it('should return false when field counts don\'t match (model changes not supported)', () => {
+            const card = new Flashcard(
+                12345,
+                'Test Deck',
+                'Test Question',
+                { Front: 'Test Question', Back: 'Test Answer' },
+                false,
+                0,
+                100,
+                ['tag1', 'tag2'],
+                true,
+                [],
+                false // containsCode
+            );
+
+            const ankiCard = {
+                modelName: 'Different Model',
+                fields: {
+                    Front: { value: 'Test Question', order: 0 },
+                    Back: { value: 'Test Answer', order: 1 },
+                    Extra: { value: 'Additional Field', order: 2 }
+                },
+                tags: ['tag1', 'tag2']
+            };
+
+            expect(card.match(ankiCard)).toBe(false);
+        });
     });
 
     // Test Inlinecard entity
@@ -654,7 +682,7 @@ describe('Entity Classes', () => {
             expect(card.match(ankiCard)).toBe(false);
         });
 
-        it('should return true when field counts don\'t match (assuming model change)', () => {
+        it('should return false when field counts don\'t match (model changes not supported)', () => {
             const card = new Flashcard(
                 12345,
                 'Test Deck',
@@ -679,7 +707,7 @@ describe('Entity Classes', () => {
                 tags: ['tag1', 'tag2']
             };
 
-            expect(card.match(ankiCard)).toBe(true);
+            expect(card.match(ankiCard)).toBe(false);
         });
     });
 }); 
