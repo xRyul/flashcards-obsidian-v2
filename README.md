@@ -31,8 +31,6 @@ The following is a demo where the three main operations are shown:
 2. **Update** of cards;
 3. **Deletion** of cards.
 
-![Demo image](docs/demo.gif)
-
 ## How to use it?
 
 1. Define a hashtag - default is #card

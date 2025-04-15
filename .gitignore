@@ -31,3 +31,7 @@ move.sh
 
 # Test-vault
 docs/test-vault/.obsidian/workspace
+
+# Memory Bank
+memory-bank/
+coverage/

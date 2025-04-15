@@ -1,6 +1,7 @@
 # Progress
 
 * **What Works:**
+    * Repository cleanup: `docs/` folder removed, `README.md` updated, `memory-bank/` and `coverage/` added to `.gitignore`.
     * Inline cards (`::`, `:::`) now correctly parse multi-line answers, including subsequent content lines (like `(slide ...)` reference) before the Anki ID block.
     * Command "Delete selected card(s) from Anki only": Deletes Anki notes corresponding to IDs within the selected text and removes the ID blocks from the selection in Obsidian.
     * Command "Delete all cards in current file from Anki only": Deletes all Anki notes corresponding to IDs found in the current file and removes the ID blocks from the file in Obsidian, preserving layout.
@@ -10,7 +11,7 @@
     * Image dimension syntax (`|width` or `|widthxheight`) is correctly parsed and applied as `width` and `height` attributes to `<img>` tags in Anki.
 * **What's Left:**
     * Populate core Memory Bank documents (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`).
-* **Current Status:** Multi-line inline card parsing fixed. Awaiting next task or project context information.
+* **Current Status:** Repository and documentation cleanup completed. Awaiting next task or project context information.
 * **Known Issues:**
     * None currently identified related to implemented features.
 * **Decision Evolution:**

@@ -1,7 +1,10 @@
 # Active Context
 
-* **Current Focus:** Completed fix for multi-line inline card parsing.
+* **Current Focus:** Repository and documentation cleanup.
 * **Recent Changes:**
+    * Deleted the `docs/` directory as it was deemed unnecessary (contained contributor info, demo assets).
+    * Removed the link to the demo image (`docs/demo.gif`) from `README.md`.
+    * Added `memory-bank/` and `coverage/` directories to `.gitignore` to prevent tracking Memory Bank and test coverage reports.
     * **Fixed Multi-line Inline Card Parsing:**
         * **Issue:** Inline cards (`::`) followed by additional content lines (e.g., `(slide 135)`) were incorrectly parsed. The additional lines were not included in the answer, and the Anki ID was placed before them.
         * **Debugging:** Added a Jest test case (`tests/unit/parser.test.ts`) specifically for this scenario. Used console logging to trace the issue to incorrect regex group indexing and overly broad card start detection within the answer collection loop in `generateInlineCards` (`src/services/parser.ts`).
@@ -24,6 +27,8 @@
         * Previous attempts using placeholders (`@@IMAGE::...@@`) failed due to complex interactions with `showdown` or placeholder mismatches.
 * **Next Steps:** Awaiting user instructions for the next task. Populating core Memory Bank documents (`projectbrief.md`, `productContext.md`) is still pending.
 * **Active Decisions:**
+    * Removed `docs/` directory and associated README link.
+    * Ignored `memory-bank/` and `coverage/` in git.
     * Adopted multi-line answer collection logic for inline cards (`::`, `:::`) similar to `#card` style, ensuring subsequent non-empty lines are included before the ID block.
     * Adopted `<!-- ankiID: 1234567890 -->` as the new format for Anki card IDs to avoid conflicts with Obsidian block references (`^block-id`). Removed support for the old `^...` format.
     * Adopted a "direct generation + cleanup" approach for handling image links in the parser.
