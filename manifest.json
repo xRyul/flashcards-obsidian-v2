@@ -1,7 +1,7 @@
 {
   "id": "flashcards-v2",
   "name": "Flashcards-v2",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "minAppVersion": "1.4.0",
   "description": "Sync Obsidian notes, tags, flashcards to Anki",
   "author": "xRyul",
