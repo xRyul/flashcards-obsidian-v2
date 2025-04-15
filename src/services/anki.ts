@@ -191,6 +191,35 @@ export class Anki {
     return await this.invoke("notesInfo", 6, { notes: ids });
   }
 
+  /**
+   * Finds notes in Anki based on a query.
+   * @param query The Anki search query (e.g., "deck:MyDeck")
+   * @returns An array of note IDs matching the query.
+   */
+  public async findNotes(query: string): Promise<number[]> {
+    return await this.invoke("findNotes", 6, { query: query });
+  }
+
+  /**
+   * Fetches detailed information for all notes within a specific deck.
+   * @param deckName The name of the deck.
+   * @returns An array of note information objects.
+   */
+  public async getNotesInDeck(deckName: string): Promise<any[]> {
+    console.debug(`AnkiService: Finding notes in deck '${deckName}'`);
+    const query = `deck:"${deckName}"`;
+    const noteIds = await this.findNotes(query);
+    console.debug(`AnkiService: Found ${noteIds.length} notes in deck '${deckName}'. Fetching details...`);
+    if (noteIds.length === 0) {
+      return [];
+    }
+    // AnkiConnect can handle large requests, but batching might be safer for extremely large decks.
+    // For now, fetch all at once.
+    const notesInfo = await this.getCards(noteIds); // Re-use getCards which calls notesInfo
+    console.debug(`AnkiService: Fetched details for ${notesInfo.length} notes.`);
+    return notesInfo;
+  }
+
   public async deleteCards(ids: number[]) {
     return this.invoke("deleteNotes", 6, { notes: ids });
   }

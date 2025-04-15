@@ -80,9 +80,14 @@ export class CardsService {
       globalTags = this.parseGlobalTags(this.file);
       // TODO with empty check that does not call ankiCards line
       const ankiBlocks = this.parser.getAnkiIDsBlocks(this.file);
-      const ankiCards = ankiBlocks
-        ? await this.anki.getCards(this.getAnkiIDs(ankiBlocks))
-        : undefined;
+      const ankiIDsInFile = this.getAnkiIDs(ankiBlocks);
+      // Fetch info for ALL notes in the target deck for reliable ID recovery
+      const allAnkiNotesInDeck = await this.anki.getNotesInDeck(deckName);
+      
+      // Also fetch specific info for IDs found in the file, for update checks
+      const ankiNotesForIDsInFile = ankiIDsInFile.length > 0 
+        ? await this.anki.getCards(ankiIDsInFile)
+        : [];
 
       const cards: Card[] = this.parser.generateFlashcards(
         this.file,
@@ -92,11 +97,12 @@ export class CardsService {
         globalTags
       );
       const [cardsToCreate, cardsToUpdate, cardsNotInAnki] = this.filterByUpdate(
-        ankiCards,
+        allAnkiNotesInDeck, // Use complete list for ID recovery
+        ankiNotesForIDsInFile, // Use list for IDs in file for update checks
         cards,
-        this.getAnkiIDs(ankiBlocks)
+        ankiIDsInFile // Pass the set of IDs found in the file
       );
-      const cardIds: number[] = this.getCardsIds(ankiCards, cards);
+      const cardIds: number[] = this.getCardsIds(ankiNotesForIDsInFile, cards);
       const cardsToDelete: number[] = this.parser.getCardsToDelete(this.file);
 
       console.info("Flashcards: Cards to create");
@@ -319,7 +325,8 @@ export class CardsService {
   }
 
   public filterByUpdate(
-    ankiCards: any, // Note info from Anki for existing IDs found in file
+    allAnkiNotesInDeck: any, // Complete list for ID recovery
+    ankiNotesForIDsInFile: any, // List for IDs in file for update checks
     generatedCards: Card[], // All cards parsed from the file
     ankiIDsInFile: number[] // Explicit list of IDs found in the file by getAnkiIDsBlocks
   ) {
@@ -328,6 +335,7 @@ export class CardsService {
     const cardsNotInAnki: Card[] = [];
     const fileAnkiIdSet = new Set(ankiIDsInFile);
 
+    // First process cards that already have IDs
     for (const flashcard of generatedCards) {
       // generatedCards have id = -1 if parser didn't find an ID block for them
       // It has a positive ID if the parser *did* find an ID block.
@@ -338,7 +346,7 @@ export class CardsService {
         if (fileAnkiIdSet.has(flashcard.id)) {
           // ID was found by parser AND exists in the file.
           // Now check against Anki's data.
-          let ankiCard = ankiCards?.filter(
+          let ankiCard = ankiNotesForIDsInFile?.filter(
             (card: any) => Number(card.noteId) === flashcard.id
           )[0];
           
@@ -359,12 +367,106 @@ export class CardsService {
         }
       } else {
         // Parser did NOT find an ID for this card (flashcard.id === -1).
-        // It must be a new card.
+        // Temporarily add to cardsToCreate; we'll check for content matches below.
         cardsToCreate.push(flashcard);
       }
     }
 
+    // Now handle cards without IDs by checking if they match existing Anki cards
+    // Use the complete list of notes from the deck for reliable ID recovery
+    if (allAnkiNotesInDeck && cardsToCreate.length > 0) {
+      // Keep track of cards we've already matched to avoid duplicates
+      const matchedAnkiCardIds = new Set<number>();
+      
+      // New array for cards still needing creation after content matching
+      const stillNeedCreation: Card[] = [];
+      
+      for (const cardWithoutId of cardsToCreate) {
+        let contentMatch = false;
+        
+        // Skip if this card already has an ID (shouldn't happen, but just in case)
+        if (cardWithoutId.id !== -1) {
+          stillNeedCreation.push(cardWithoutId);
+          continue;
+        }
+        
+        // Look through ALL Anki notes in the deck for content match
+        for (const ankiCard of allAnkiNotesInDeck) {
+          const noteId = Number(ankiCard.noteId);
+          
+          // Skip if this Anki card was already matched to another card
+          if (matchedAnkiCardIds.has(noteId)) {
+            // Check if content *would* have matched if not already used
+            const tempCard = Object.assign(Object.create(Object.getPrototypeOf(cardWithoutId)), cardWithoutId);
+            tempCard.id = noteId; // Temporarily assign ID for matching check
+            if (tempCard.match(ankiCard)) {
+                console.warn(`Potential content match ignored: Card starting with "${cardWithoutId.initialContent.substring(0, 50)}..." matches Anki card ID ${noteId}, but this ID was already assigned to another card in this file.`);
+            }
+            continue;
+          }
+          
+          // Create a temporary card with the Anki ID to use the match function
+          const tempCard = Object.assign(Object.create(Object.getPrototypeOf(cardWithoutId)), cardWithoutId);
+          tempCard.id = noteId;
+          
+          // Check if content matches using the loose (front-field only) comparison for ID recovery
+          if (cardWithoutId.looselyMatchesFrontField(ankiCard)) {
+            console.info(`Found potential content match via front field: Recovered ID ${noteId} for card without ID`);
+            cardWithoutId.id = noteId;
+            cardWithoutId.inserted = true; // Mark as inserted so ID gets written back
+            
+            // Write the ID back to the file
+            this.updateFile = true;
+            this.file = this.addMissingIdToCard(cardWithoutId);
+            
+            // Now use the STRICT match to see if an update is needed
+            if (!cardWithoutId.match(ankiCard)) {
+              console.debug(`Strict match failed for recovered ID ${noteId}. Card needs update.`);
+              cardWithoutId.oldTags = ankiCard.tags;
+              cardsToUpdate.push(cardWithoutId);
+            } else {
+              console.debug(`Strict match passed for recovered ID ${noteId}. No update needed.`);
+            }
+            
+            contentMatch = true;
+            break;
+          }
+        }
+        
+        // If no match found, this card still needs to be created
+        if (!contentMatch) {
+          stillNeedCreation.push(cardWithoutId);
+        }
+      }
+      
+      // Replace cardsToCreate with cards that still need creation
+      cardsToCreate = stillNeedCreation;
+    }
+
+    console.debug("Flashcards: Final cards identified for creation after ID recovery attempt:", JSON.stringify(cardsToCreate.map(c => ({ id: c.id, initialContent: c.initialContent.substring(0, 100) + '...', fields: c.fields, tags: c.tags }))));
+    console.debug("Flashcards: Final cards identified for update:", JSON.stringify(cardsToUpdate.map(c => ({ id: c.id, initialContent: c.initialContent.substring(0, 100) + '...', fields: c.fields, tags: c.tags, oldTags: c.oldTags }))));
+    console.debug("Flashcards: Final cards identified as not in Anki:", JSON.stringify(cardsNotInAnki.map(c => ({ id: c.id, initialContent: c.initialContent.substring(0, 100) + '...' }))));
+
     return [cardsToCreate, cardsToUpdate, cardsNotInAnki];
+  }
+  
+  private addMissingIdToCard(card: Card): string {
+    let fileContent = this.file;
+    const idString = card.getIdFormat();
+    
+    // Find the end of the card content based on the endOffset
+    let insertPosition = card.endOffset;
+    
+    // Ensure we insert on a new line
+    if (fileContent.charAt(insertPosition - 1) !== '\n') {
+      // Add newline before ID if not already present
+      fileContent = fileContent.substring(0, insertPosition) + '\n' + idString + fileContent.substring(insertPosition);
+    } else {
+      // Insert ID on the existing newline
+      fileContent = fileContent.substring(0, insertPosition) + idString + fileContent.substring(insertPosition);
+    }
+    
+    return fileContent;
   }
 
   public async deckNeedToBeChanged(cardsIds: number[], deckName: string) {

@@ -63,7 +63,7 @@ Inline style with multiline:
 ```markdown
 Question::Answer Line 1
 Answer Line 2
-(Any subsequent non-empty lines are part of the answer)
+(Any subsequent non-empty lines before the next card or ID block are part of the answer)
 ```
 
 #### Reverse
@@ -77,6 +77,7 @@ My question ::: My answer
 Question:::Answer Line 1
 Answer Line 2
 Answer Line 3
+(Any subsequent non-empty lines before the next card or ID block are part of the answer)
 ```
 
 ### Cloze
@@ -96,7 +97,7 @@ This could be a beautifull quote that you want to see once in a while #card-spac
 2. Then to insert/update/delete just run inside Obsidian the command `Ctrl+p` and execute the command `Flashcards: Generate for the current file`
 
 ### Insert
-Write the cards and just run the command above. The insertion operation will add cards on Anki. In Obsidian, it will add an HTML comment containing the Anki card ID on the line immediately following **all** of the card's content (including any multi-line answers for both `#card` and `::`/`:::` styles). This ID is used to track the card for updates and deletions.
+Write the cards and just run the command above. The insertion operation will add cards on Anki. In Obsidian, it will add an HTML comment containing the Anki card ID (`<!-- ankiID: 1234567890 -->`) on the line immediately following **all** of the card's content (including any multi-line answers for both `#card` and `::`/`:::` styles). This ID is used to track the card for updates and deletions.
 
 Example (`#card`):
 ```markdown
@@ -116,6 +117,15 @@ My Answer Line 2
 ### Update
 Just edit the card in Obsidian, and run the command `Flashcards: Generate for the current file` again.
 
+### Automatic ID Recovery
+If you accidentally delete the `<!-- ankiID: ... -->` comment from your Obsidian note, the plugin will attempt to automatically recover it during the next sync (`Flashcards: Generate for the current file`).
+
+- It compares the content of cards without IDs in Obsidian to existing cards in the target Anki deck.
+- It uses a matching logic primarily based on the card's first field (usually the "Front") to align with Anki's own duplicate detection.
+- If a unique match is found based on the first field, the plugin recovers the missing Anki ID and inserts the `<!-- ankiID: ... -->` comment back into your Obsidian note.
+- If the *other* fields (like "Back" or tags) differ between the Obsidian card and the matched Anki card, the card will also be marked for update in Anki.
+- This prevents accidental duplicate card creation when IDs are removed in Obsidian.
+
 ### Deleting Cards Directly from Anki
 
 This plugin provides two commands to delete cards directly from Anki and simultaneously clean up the corresponding ID blocks in your Obsidian notes:
@@ -132,7 +142,7 @@ This plugin provides two commands to delete cards directly from Anki and simulta
     *   Run the command `Flashcards: Delete all cards in current file from Anki only`.
     *   The plugin will find all Anki ID comments (`<!-- ankiID: ... -->`) in the file, delete the corresponding notes from Anki, and remove the ID comment lines from the Obsidian note, preserving the note's layout.
 
-**Note:** These commands *only* affect Anki and the ID blocks in Obsidian. They do not delete the original card content (front/back) from your Obsidian note. This allows you to keep the information in Obsidian even after removing the flashcard from Anki.
+**Note:** These commands *only* affect Anki and the ID blocks in Obsidian. They do not delete the original card content (front/back) from your Obsidian note. This allows you to keep the information in Obsidian even after removing the flashcard from Anki. If you run the sync command again after deleting from Anki only, the ID Recovery feature may add the ID back if the content still matches.
 
 ## Features
 
@@ -232,8 +242,10 @@ $$50+2$$
 ```
 
 ## Troubleshooting
-If you have some problem in the configuration step with Anki, open Anki annd `Tools -> Add-ons -> AnkiConnect -> Config`, paste the following:
 
+*   **AnkiConnect Configuration:** If you have trouble connecting, ensure Anki is running with the AnkiConnect add-on installed and configured correctly. Open Anki, go to `Tools -> Add-ons -> AnkiConnect -> Config`, and verify the settings, especially `webCorsOriginList` should include `"app://obsidian.md"`. The default configuration is usually sufficient:
+
+    ```json
     {
         "apiKey": null,
         "apiLogPath": null,
@@ -245,6 +257,9 @@ If you have some problem in the configuration step with Anki, open Anki annd `To
             "app://obsidian.md"
         ]
     }
+    ```
+*   **Duplicate Errors During Sync:** If you encounter errors like `cannot create note because it is a duplicate` even after the ID recovery feature, it might indicate a subtle difference in how Anki checks duplicates versus the plugin's `looselyMatchesFrontField` logic (e.g., HTML normalization differences). Ensure the "Front" field content of the card in Obsidian is truly unique within the target Anki deck.
+
 
 ## How to install
 
