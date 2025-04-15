@@ -93,7 +93,8 @@ export class CardsService {
       );
       const [cardsToCreate, cardsToUpdate, cardsNotInAnki] = this.filterByUpdate(
         ankiCards,
-        cards
+        cards,
+        this.getAnkiIDs(ankiBlocks)
       );
       const cardIds: number[] = this.getCardsIds(ankiCards, cards);
       const cardsToDelete: number[] = this.parser.getCardsToDelete(this.file);
@@ -237,23 +238,20 @@ export class CardsService {
       // Card.id cannot be null, because if written already previously it has an ID,
       //   if it has been inserted it has an ID too
       if (card.id !== null && !card.inserted) {
-        let id = card.getIdFormat();
-        if (card instanceof Inlinecard) {
-          if (this.settings.inlineID) {
-            id = " " + id;
-          } else {
-            id = "\n" + id;
-          }
-        }
         card.endOffset += this.totalOffset;
         const offset = card.endOffset;
+        const idString = card.getIdFormat();
+
+        // Check if the character before the insertion point is already a newline
+        const precedingChar = this.file.charAt(offset - 1);
+        const stringToInsert = precedingChar === '\n' ? idString : '\n' + idString;
 
         this.updateFile = true;
         this.file =
           this.file.substring(0, offset) +
-          id +
+          stringToInsert +
           this.file.substring(offset, this.file.length + 1);
-        this.totalOffset += id.length;
+        this.totalOffset += stringToInsert.length;
       }
     }
   }
@@ -320,32 +318,50 @@ export class CardsService {
     return IDs;
   }
 
-  public filterByUpdate(ankiCards: any, generatedCards: Card[]) {
+  public filterByUpdate(
+    ankiCards: any, // Note info from Anki for existing IDs found in file
+    generatedCards: Card[], // All cards parsed from the file
+    ankiIDsInFile: number[] // Explicit list of IDs found in the file by getAnkiIDsBlocks
+  ) {
     let cardsToCreate: Card[] = [];
     const cardsToUpdate: Card[] = [];
     const cardsNotInAnki: Card[] = [];
+    const fileAnkiIdSet = new Set(ankiIDsInFile);
 
-    if (ankiCards) {
-      for (const flashcard of generatedCards) {
-        // Inserted means that anki blocks are available, that means that the card should
-        // 	(the user can always delete it) be in Anki
-        let ankiCard = undefined;
-        if (flashcard.inserted) {
-          ankiCard = ankiCards.filter(
+    for (const flashcard of generatedCards) {
+      // generatedCards have id = -1 if parser didn't find an ID block for them
+      // It has a positive ID if the parser *did* find an ID block.
+
+      if (flashcard.id !== -1) {
+        // Parser found an ID for this card.
+        // Check if this ID was actually in the set of IDs found in the file.
+        if (fileAnkiIdSet.has(flashcard.id)) {
+          // ID was found by parser AND exists in the file.
+          // Now check against Anki's data.
+          let ankiCard = ankiCards?.filter(
             (card: any) => Number(card.noteId) === flashcard.id
           )[0];
+          
           if (!ankiCard) {
+            // ID in file, but card missing in Anki. Treat as error/warning.
             cardsNotInAnki.push(flashcard);
           } else if (!flashcard.match(ankiCard)) {
+            // ID in file and Anki, content differs -> needs update.
             flashcard.oldTags = ankiCard.tags;
             cardsToUpdate.push(flashcard);
           }
+          // else: ID in file, ID in Anki, content matches -> do nothing.
         } else {
+          // Parser found an ID, but it wasn't in the blocks scanned from the file.
+          // This case shouldn't happen with current parsing, but if it did,
+          // treat as needing creation (maybe block was deleted manually).
           cardsToCreate.push(flashcard);
         }
+      } else {
+        // Parser did NOT find an ID for this card (flashcard.id === -1).
+        // It must be a new card.
+        cardsToCreate.push(flashcard);
       }
-    } else {
-      cardsToCreate = [...generatedCards];
     }
 
     return [cardsToCreate, cardsToUpdate, cardsNotInAnki];

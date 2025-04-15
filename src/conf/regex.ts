@@ -50,7 +50,7 @@ export class Regex {
     this.mathInline = /(\$)(.*?)(\$)/gi;
 
     this.cardsDeckLine = /cards-deck: [\p{L}]+/giu;
-    this.cardsToDelete = /^\s*(?:\n)(?:\^(\d{13}))(?:\n\s*?)?/gm;
+    this.cardsToDelete = /^\s*(?:\n)(?:<!-- ankiID: (\d+) -->)(?:\n\s*?)?/gm;
 
     // https://regex101.com/r/WxuFI2/1
     this.globalTagsSplitter =
@@ -61,9 +61,11 @@ export class Regex {
     const flags = "gimu";
     // https://regex101.com/r/p3yQwY/2
     let str =
-      "( {0,3}[#]*)((?:[^\\n]\\n?)+?)(#" +
+      // Simplified regex: Matches optional markers, captures first line content, #card tag, and optional following tags.
+      // It does NOT capture the answer or the ID block.
+      "^(?:> *)?(?:(?:[-*+]|\\d+\\.) *)?( {0,3}[#]*)((?:[^\\n])+?)(#" +
       settings.flashcardsTag +
-      "(?:[/-]reverse)?)((?: *#[\\p{Number}\\p{Letter}\\-\\/_]+)*) *?\\n+((?:[^\\n]\\n?)*?(?=\\^\\d{13}|$))(?:\\^(\\d{13}))?";
+      "(?:[/-]reverse)?)((?: *#[\\p{Number}\\p{Letter}\\-\\/_]+)*) *?$"; // Match end of line
     this.flashscardsWithTag = new RegExp(str, flags);
 
     // https://regex101.com/r/8wmOo8/1
@@ -73,10 +75,10 @@ export class Regex {
     // sepShortest is the shortest
     if (settings.inlineID) {
       str =
-        "( {0,3}[#]{0,6})?(?:(?:[\\t ]*)(?:\\d.|[-+*]|#{1,6}))?(.+?) ?(" + sepLongest + "|" + sepShortest + ") ?(.+?)((?: *#[\\p{Letter}\\-\\/_]+)+)?(?:\\s+\\^(\\d{13})|$)";
+        "( {0,3}[#]{0,6})?(?:(?:[\\t ]*)(?:\\d.|[-+*]|#{1,6}))?(.+?) ?(" + sepLongest + "|" + sepShortest + ") ?(.+?)((?: *#[\\p{Letter}\\-\\/_]+)+)?(?:\\s+<!-- ankiID: (\\d+) -->|$)";
     } else {
       str =
-        "( {0,3}[#]{0,6})?(?:(?:[\\t ]*)(?:\\d.|[-+*]|#{1,6}))?(.+?) ?(" + sepLongest + "|" + sepShortest + ") ?(.+?)((?: *#[\\p{Letter}\\-\\/_]+)+|$)(?:\\n\\^(\\d{13}))?";
+        "( {0,3}[#]{0,6})?(?:(?:[\\t ]*)(?:\\d.|[-+*]|#{1,6}))?(.+?) ?(" + sepLongest + "|" + sepShortest + ") ?(.+?)((?: *#[\\p{Letter}\\-\\/_]+)+|$)(?:\\n<!-- ankiID: (\\d+) -->)?";
     }
     this.cardsInlineStyle = new RegExp(str, flags);
 
@@ -84,12 +86,12 @@ export class Regex {
     str =
       "( {0,3}[#]*)((?:[^\\n]\\n?)+?)(#" +
       settings.flashcardsTag +
-      "[/-]spaced)((?: *#[\\p{Letter}-]+)*) *\\n?(?:\\^(\\d{13}))?";
+      "[/-]spaced)((?: *#[\\p{Letter}-]+)*) *\\n?(?:<!-- ankiID: (\\d+) -->)?";
     this.cardsSpacedStyle = new RegExp(str, flags);
 
     // https://regex101.com/r/cgtnLf/1
 
-    str = "( {0,3}[#]{0,6})?(?:(?:[\\t ]*)(?:\\d.|[-+*]|#{1,6}))?(.*?(==.+?==|\\{.+?\\}).*?)((?: *#[\\w\\-\\/_]+)+|$)(?:\n\\^(\\d{13}))?"
+    str = "( {0,3}[#]{0,6})?(?:(?:[\\t ]*)(?:\\d.|[-+*]|#{1,6}))?(.*?(==.+?==|\\{.+?\\}).*?)((?: *#[\\w\\-\\/_]+)+|$)(?:\\n<!-- ankiID: (\\d+) -->)?"
     this.cardsClozeWholeLine = new RegExp(str, flags);
     
     this.singleClozeCurly = /((?:{)(?:(\d):?)?(.+?)(?:}))/g;

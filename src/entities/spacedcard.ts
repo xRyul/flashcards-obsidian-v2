@@ -69,6 +69,6 @@ export class Spacedcard extends Card {
   };
 
   public getIdFormat(): string {
-    return "^" + this.id.toString() + "\n";
+    return `<!-- ankiID: ${this.id} -->`;
   }
 }

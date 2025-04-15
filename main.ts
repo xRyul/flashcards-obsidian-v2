@@ -46,11 +46,12 @@ export default class ObsidianFlashcard extends Plugin {
 				const selection = editor.getSelection();
 				const ankiIdsToDelete: number[] = [];
 
-				const idRegex = /(?:^%%anki ID: (\d+)%%$|^\^(\d+)$)/gm;
+				// Regex to find the HTML comment Anki ID format on its own line
+				const idRegex = /^<!-- ankiID: (\d+) -->$/gm;
 				let match;
 
 				while ((match = idRegex.exec(selection)) !== null) {
-					const idString = match[1] || match[2];
+					const idString = match[1];
 					if (idString) {
 						ankiIdsToDelete.push(parseInt(idString, 10));
 					}
@@ -90,12 +91,13 @@ export default class ObsidianFlashcard extends Plugin {
 
 				const fileContent = await this.app.vault.read(file);
 				const ankiIdsToDelete: number[] = [];
-				const idRegex = /(?:^%%anki ID: (\d+)%%$|^\^(\d+)$)/gm; // Global flag needed
+				// Regex to find the HTML comment Anki ID format on its own line
+				const idRegex = /^<!-- ankiID: (\d+) -->$/gm; // Global flag needed
 				let match;
 
 				// Find all IDs within the entire file content
 				while ((match = idRegex.exec(fileContent)) !== null) {
-					const idString = match[1] || match[2];
+					const idString = match[1];
 					if (idString) {
 						ankiIdsToDelete.push(parseInt(idString, 10));
 					}

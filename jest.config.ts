@@ -33,7 +33,7 @@ export default {
     // Indicates which provider should be used to instrument code for coverage
     coverageProvider: "v8",
   
-    // A list of reporter names that Jest uses when writing coverage reports
+    // A list of path to modules that run some code to configure or set up the testing framework before each test
     // coverageReporters: [
     //   "json",
     //   "text",
@@ -88,7 +88,12 @@ export default {
     // ],
   
     // A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module
-    // moduleNameMapper: {},
+    moduleNameMapper: {
+      // Handle absolute path imports starting with 'src/'
+      '^src/(.*)$': '<rootDir>/src/$1',
+      // Mock the obsidian module
+      '^obsidian$': '<rootDir>/tests/mocks/obsidian.ts',
+    },
   
     // An array of regexp pattern strings, matched against all module paths before considered 'visible' to the module loader
     // modulePathIgnorePatterns: [],
@@ -135,7 +140,7 @@ export default {
     // setupFiles: [],
   
     // A list of paths to modules that run some code to configure or set up the testing framework before each test
-    // setupFilesAfterEnv: [],
+    setupFilesAfterEnv: ['./tests/setup.ts'],
   
     // The number of seconds after which a test is considered as slow and reported as such in the results.
     // slowTestThreshold: 5,

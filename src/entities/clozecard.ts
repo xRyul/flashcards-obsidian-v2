@@ -69,6 +69,6 @@ export class Clozecard extends Card {
   };
 
   public getIdFormat(): string {
-    return "\n^" + this.id.toString();
+    return `<!-- ankiID: ${this.id} -->`;
   }
 }

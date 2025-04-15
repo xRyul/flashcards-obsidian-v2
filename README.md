@@ -105,33 +105,28 @@ Optionally, you can consider the `#card/spaced` alternative to use obsidian hier
 2. Then to insert/update/delete just run inside Obsidian the command `Ctrl+p` and execute the command `Flashcards: generate for the current file`
 
 ### Insert
-Write the cards and just run the command above. The insertion operation will add cards on Anki. While, in Obsidian it will add an ID to keep track of them.
+Write the cards and just run the command above. The insertion operation will add cards on Anki. In Obsidian, it will add an HTML comment containing the Anki card ID on the line immediately following the card's content. This ID is used to track the card for updates and deletions.
+
+Example:
+```markdown
+# My Title
+
+Question? #card
+Answer.
+<!-- ankiID: 1712345678901 -->
+```
 
 ### Update
 Just edit the card in Obsidian, and run the command above.   
 **NOTE: Make certain that when you want to update the BROWSE window of Anki is closed.** 
 Unfortunately, this is a bug that is not my under control, but it's a problem tied up with the Anki APIs I am using.
 
-### Delete (Original Method)
-**(Note: This is an alternative method. See "Deleting Cards Directly from Anki" below for newer commands that directly remove cards from Anki and cleanup IDs.)**
-Delete the content of the card in Obsidian, but without deleting the ID. The plugin will take care of it. So for example
-```markdown
-## This is the front of the card to delete #card    
-This is the back of the card to delete.
-^1607361487244
-```
-This is what you should leave:
-```markdown
-^1607361487244
-```
-Then run the `Flashcards: generate for the current file` command.
-
 ### Deleting Cards Directly from Anki
 
 This plugin provides two commands to delete cards directly from Anki and simultaneously clean up the corresponding ID blocks in your Obsidian notes:
 
 1.  **Delete Selected Card(s) from Anki Only:**
-    *   Select the text in your Obsidian note that contains the Anki card ID(s) you want to delete. Supported ID formats are `^1234567890` and `%%anki ID: 1234567890%%`.
+    *   Select the text in your Obsidian note that contains the Anki card ID comment(s) (`<!-- ankiID: 1234567890 -->`) you want to delete.
     *   Open the Command Palette (`Ctrl+P` or `Cmd+P`).
     *   Run the command `Flashcards: Delete selected card(s) from Anki only`.
     *   The corresponding notes will be deleted from Anki, and the ID blocks within your selection will be removed from the Obsidian note.
@@ -140,7 +135,7 @@ This plugin provides two commands to delete cards directly from Anki and simulta
     *   Open the Obsidian note containing the cards you wish to remove from Anki.
     *   Open the Command Palette (`Ctrl+P` or `Cmd+P`).
     *   Run the command `Flashcards: Delete all cards in current file from Anki only`.
-    *   The plugin will find all Anki IDs (`^...` or `%%...%%`) in the file, delete the corresponding notes from Anki, and remove all found ID blocks from the Obsidian note, preserving the note's layout.
+    *   The plugin will find all Anki ID comments (`<!-- ankiID: ... -->`) in the file, delete the corresponding notes from Anki, and remove the ID comment lines from the Obsidian note, preserving the note's layout.
 
 **Note:** These commands *only* affect Anki and the ID blocks in Obsidian. They do not delete the original card content (front/back) from your Obsidian note. This allows you to keep the information in Obsidian even after removing the flashcard from Anki.
 

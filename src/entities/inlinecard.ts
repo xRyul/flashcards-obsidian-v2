@@ -72,6 +72,6 @@ export class Inlinecard extends Card {
   };
 
   public getIdFormat(): string {
-    return "^" + this.id.toString();
+    return `<!-- ankiID: ${this.id} -->`;
   }
 }
