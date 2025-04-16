@@ -1,0 +1,95 @@
+# .github/workflows/release.yml
+name: Release Plugin
+
+on:
+  push:
+    branches:
+      - main # Or your default branch
+
+permissions:
+  contents: write # Needed to push commits/tags and create releases
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to get previous tags
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18' # Use a specific Node version
+
+      - name: Install jq (for manifest.json update)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build plugin
+        run: npm run build # Assuming you have a build script
+
+      - name: Configure Git user
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync manifest.json version with package.json
+        id: sync_manifest
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current package.json version: $CURRENT_VERSION"
+          # Use jq to update manifest.json version
+          jq --arg v "$CURRENT_VERSION" '.version = $v' manifest.json > tmp.$$.json && mv tmp.$$.json manifest.json
+          echo "Updated manifest.json"
+          # Stage the change
+          git add manifest.json
+          # Commit the change if manifest.json was modified
+          git diff --staged --quiet || git commit -m "chore: Sync manifest.json to package.json version $CURRENT_VERSION"
+
+      - name: Bump version, commit, and tag
+        id: tag_version
+        run: |
+          # Bump patch version using npm version. This creates a commit and tag.
+          npm version patch -m "chore(release): %s"
+          # Fetch the new tag name
+          NEW_TAG=$(git describe --tags --abbrev=0)
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+
+      - name: Generate Release Notes
+        id: generate_notes
+        run: |
+          # Get the previous tag name
+          # Uses git rev-list to get the second most recent tag, handles case of only one tag
+          PREVIOUS_TAG=$(git describe --tags $(git rev-list --tags --max-count=1 --skip=1) 2>/dev/null || echo "")
+          echo "Previous tag: $PREVIOUS_TAG"
+
+          # Generate notes from commits between the previous and new tag
+          # Handles the case where PREVIOUS_TAG is empty (first release)
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "Generating notes from first commit to $NEW_TAG"
+            git log $NEW_TAG --pretty=format:'* %s (%h)' > ${{ runner.temp }}/RELEASE_NOTES.md
+          else
+            echo "Generating notes from $PREVIOUS_TAG to $NEW_TAG"
+            git log ${PREVIOUS_TAG}..${NEW_TAG} --pretty=format:'* %s (%h)' > ${{ runner.temp }}/RELEASE_NOTES.md
+          fi
+
+          echo "Release notes generated:"
+          cat ${{ runner.temp }}/RELEASE_NOTES.md
+
+      - name: Push changes (commit and tag)
+        run: git push origin main --follow-tags
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.NEW_TAG }}
+          release_name: Release ${{ env.NEW_TAG }}
+          body_path: ${{ runner.temp }}/RELEASE_NOTES.md
+          draft: false
+          prerelease: false 
