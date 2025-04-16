@@ -9,6 +9,7 @@ import { Clozecard } from "src/entities/clozecard";
 import { escapeMarkdown } from "src/utils";
 import { Card } from "src/entities/card";
 import { htmlToMarkdown } from 'obsidian';
+import { Heading, SpacedCardFields, ClozeCardFields, BasicCardFields } from "../types/parser";
 
 export class Parser {
   private regex: Regex;
@@ -43,11 +44,11 @@ export class Parser {
     });
     const contextAware = this.settings.contextAwareMode;
     let cards: Card[] = [];
-    let headings: any = [];
+    let headings: Heading[] = [];
 
     if (contextAware) {
       // https://regex101.com/r/agSp9X/4
-      headings = [...file.matchAll(this.regex.headingsRegex)];
+      headings = [...file.matchAll(this.regex.headingsRegex)] as unknown as Heading[];
     }
 
     note = this.substituteObsidianLinks(`[[${note}]]`, vault);
@@ -100,7 +101,7 @@ export class Parser {
    * @param headingLevel The level of the first ancestor heading, i.e. the number of #.
    */
   private getContext(
-    headings: any,
+    headings: Heading[],
     index: number,
     headingLevel: number
   ): string[] {
@@ -143,7 +144,7 @@ export class Parser {
 
   private generateSpacedCards(
     file: string,
-    headings: any,
+    headings: Heading[],
     deck: string,
     vault: string,
     note: string,
@@ -181,7 +182,7 @@ export class Parser {
       // Spaced cards use group 5 for ID
       const id: number = match[5] ? Number(match[5]) : -1;
       const inserted: boolean = match[5] ? true : false;
-      const fields: any = { Prompt: prompt };
+      const fields: SpacedCardFields = { Prompt: prompt };
       if (this.settings.sourceSupport) {
         fields["Source"] = note;
       }
@@ -208,7 +209,7 @@ export class Parser {
 
   private generateClozeCards(
     file: string,
-    headings: any,
+    headings: Heading[],
     deck: string,
     vault: string,
     note: string,
@@ -278,7 +279,7 @@ export class Parser {
       // Cloze cards use group 5 for ID
       const id: number = match[5] ? Number(match[5]) : -1;
       const inserted: boolean = match[5] ? true : false;
-      const fields: any = { Text: clozeText, Extra: "" };
+      const fields: ClozeCardFields = { Text: clozeText, Extra: "" };
       if (this.settings.sourceSupport) {
         fields["Source"] = note;
       }
@@ -305,7 +306,7 @@ export class Parser {
 
   private generateInlineCards(
     file: string,
-    headings: any,
+    headings: Heading[],
     deck: string,
     vault: string,
     note: string,
@@ -483,7 +484,7 @@ export class Parser {
           return; // Skip this iteration
       }
 
-      const fields: any = { Front: question, Back: answer };
+      const fields: BasicCardFields = { Front: question, Back: answer };
       if (this.settings.sourceSupport) {
         fields["Source"] = note; // Use normal quotes
       }
@@ -511,7 +512,7 @@ export class Parser {
   // Refactored generateCardsWithTag
   private generateCardsWithTag(
     file: string,
-    headings: any,
+    headings: Heading[],
     deck: string,
     vault: string,
     note: string,
@@ -627,7 +628,7 @@ export class Parser {
         answer = this.parseLine(answer, vault);
 
         // Create the card object
-        const fields: any = { Front: question, Back: answer };
+        const fields: BasicCardFields = { Front: question, Back: answer };
         if (this.settings.sourceSupport) {
             fields["Source"] = note;
         }

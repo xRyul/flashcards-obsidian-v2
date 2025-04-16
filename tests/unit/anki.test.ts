@@ -1,6 +1,27 @@
 import { Anki } from '../../src/services/anki';
 import { Card } from '../../src/entities/card';
 import { Flashcard } from '../../src/entities/flashcard';
+import { 
+    CreateModelParams, 
+    AnkiCardInfo, 
+    AnkiNote, 
+    AnkiNoteInfo, 
+    AnkiStoreMediaResult, 
+    AnkiPermissionResponse, 
+    AnkiMultiPayload,
+    UpdateNoteFieldsAction,
+    ClearNotesTagsAction,
+    AddTagsAction,
+    AnkiCreateDeckPayload,
+    AnkiStoreMediaMultiPayload,
+    StoreMediaAction,
+    AnkiRetrieveMediaPayload,
+    AnkiChangeDeckPayload,
+    AnkiDeleteNotesPayload,
+    AnkiFindNotesPayload,
+    AnkiNotesInfoPayload,
+    AnkiRequestPermissionPayload
+} from '../../src/types/anki';
 
 // Define a class for our mock XMLHttpRequest
 class MockXHR {
@@ -12,11 +33,11 @@ class MockXHR {
   errorCallback: ((this: XMLHttpRequest, ev: Event) => any) | null = null;
   
   constructor() {
-    this.addEventListener = jest.fn((event: string, callback: any) => {
-      if (event === 'load') {
-        this.loadCallback = callback;
-      } else if (event === 'error') {
-        this.errorCallback = callback;
+    this.addEventListener = jest.fn((event: string, callback: EventListenerOrEventListenerObject | null) => {
+      if (event === 'load' && typeof callback === 'function') {
+        this.loadCallback = callback as (this: XMLHttpRequest, ev: Event) => any;
+      } else if (event === 'error' && typeof callback === 'function') {
+        this.errorCallback = callback as (this: XMLHttpRequest, ev: Event) => any;
       }
     });
   }
@@ -437,6 +458,207 @@ describe('Anki Service', () => {
       // Verify that we made both calls
       expect(mockXHR.send).toHaveBeenCalledTimes(2);
     });
+
+    it('should successfully update fields and tags', async () => {
+      // Setup a test card needing updates
+      const cards = [
+        new Flashcard(
+          12345,
+          'Test Deck',
+          'Updated Question\n?\nUpdated Answer',
+          { Front: 'Updated Question', Back: 'Updated Answer' },
+          false,
+          0,
+          0,
+          ['updated-tag'], // New tag
+          true,
+          [],
+          false
+        )
+      ];
+
+      let callCount = 0;
+      mockXHR.send.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // First call (notesInfo) succeeds - mock existing note data
+          mockXHR.responseText = JSON.stringify({
+            result: [
+              {
+                noteId: 12345,
+                tags: ['old-tag'], // Existing tag to be cleared
+                fields: {
+                  Front: { value: 'Old Question', order: 0 },
+                  Back: { value: 'Old Answer', order: 1 }
+                },
+                modelName: 'Obsidian-basic',
+                cards: [11111] // Example card ID
+              }
+            ],
+            error: null
+          });
+        } else if (callCount === 2) {
+          // Second call (multi action) succeeds - should return array of nulls
+          // Actions: updateNoteFields, clearNotesTags, addTags
+          mockXHR.responseText = JSON.stringify({
+            result: [null, null, null],
+            error: null
+          });
+        }
+        mockXHR.triggerLoad();
+      });
+
+      // Call updateCards
+      const result = await anki.updateCards(cards);
+
+      // Verify that we made both calls
+      expect(mockXHR.send).toHaveBeenCalledTimes(2);
+
+      // Verify the payload of the multi action
+      const multiPayload = JSON.parse(mockXHR.send.mock.calls[1][0]) as AnkiMultiPayload;
+      expect(multiPayload.action).toBe('multi');
+      expect(multiPayload.params.actions.length).toBe(3);
+
+      // Check action 1: updateNoteFields
+      expect(multiPayload.params.actions[0].action).toBe('updateNoteFields');
+      expect((multiPayload.params.actions[0] as UpdateNoteFieldsAction).params.note.id).toBe(12345);
+      expect((multiPayload.params.actions[0] as UpdateNoteFieldsAction).params.note.fields).toEqual({ Front: 'Updated Question', Back: 'Updated Answer' });
+
+      // Check action 2: clearNotesTags
+      expect(multiPayload.params.actions[1].action).toBe('clearNotesTags');
+      expect((multiPayload.params.actions[1] as ClearNotesTagsAction).params.notes).toEqual([12345]);
+
+      // Check action 3: addTags
+      expect(multiPayload.params.actions[2].action).toBe('addTags');
+      expect((multiPayload.params.actions[2] as AddTagsAction).params.notes).toEqual([12345]);
+      expect((multiPayload.params.actions[2] as AddTagsAction).params.tags).toBe('updated-tag');
+
+      // Verify the final result
+      expect(result).toEqual([null, null, null]);
+    });
+
+    it('should successfully update only fields when tags are unchanged', async () => {
+      // Setup a test card needing only field updates
+      const cards = [
+        new Flashcard(
+          54321,
+          'Test Deck',
+          'Updated Field Question\n?\nUpdated Field Answer',
+          { Front: 'Updated Field Question', Back: 'Updated Field Answer' },
+          false, 0, 0, ['same-tag'], true, [], false
+        )
+      ];
+
+      let callCount = 0;
+      mockXHR.send.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // notesInfo succeeds - note has same tag
+          mockXHR.responseText = JSON.stringify({
+            result: [{
+              noteId: 54321,
+              tags: ['same-tag'],
+              fields: { Front: { value: 'Old Field Question' }, Back: { value: 'Old Field Answer' } },
+              modelName: 'Obsidian-basic', cards: [22222]
+            }], error: null
+          });
+        } else if (callCount === 2) {
+          // multi action succeeds - only updateNoteFields called
+          mockXHR.responseText = JSON.stringify({ result: [null], error: null });
+        }
+        mockXHR.triggerLoad();
+      });
+
+      const result = await anki.updateCards(cards);
+      expect(mockXHR.send).toHaveBeenCalledTimes(2);
+      const multiPayload = JSON.parse(mockXHR.send.mock.calls[1][0]) as AnkiMultiPayload;
+      expect(multiPayload.action).toBe('multi');
+      expect(multiPayload.params.actions.length).toBe(1); // Only one action
+      expect(multiPayload.params.actions[0].action).toBe('updateNoteFields');
+      expect((multiPayload.params.actions[0] as UpdateNoteFieldsAction).params.note.id).toBe(54321);
+      expect((multiPayload.params.actions[0] as UpdateNoteFieldsAction).params.note.fields).toEqual({ Front: 'Updated Field Question', Back: 'Updated Field Answer' });
+      expect(result).toEqual([null]);
+    });
+
+    it('should successfully update only tags when fields are unchanged', async () => {
+      // Setup a test card needing only tag updates
+      const cards = [
+        new Flashcard(
+          98765,
+          'Test Deck',
+          'Same Field Question\n?\nSame Field Answer',
+          { Front: 'Same Field Question', Back: 'Same Field Answer' },
+          false, 0, 0, ['new-tag-only'], true, [], false
+        )
+      ];
+
+      let callCount = 0;
+      mockXHR.send.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // notesInfo succeeds - note has same fields, different tag
+          mockXHR.responseText = JSON.stringify({
+            result: [{
+              noteId: 98765,
+              tags: ['old-tag-only'],
+              fields: { Front: { value: 'Same Field Question' }, Back: { value: 'Same Field Answer' } },
+              modelName: 'Obsidian-basic', cards: [33333]
+            }], error: null
+          });
+        } else if (callCount === 2) {
+          // multi action succeeds - clearNotesTags, addTags called
+          mockXHR.responseText = JSON.stringify({ result: [null, null], error: null });
+        }
+        mockXHR.triggerLoad();
+      });
+
+      const result = await anki.updateCards(cards);
+      expect(mockXHR.send).toHaveBeenCalledTimes(2);
+      const multiPayload = JSON.parse(mockXHR.send.mock.calls[1][0]) as AnkiMultiPayload;
+      expect(multiPayload.action).toBe('multi');
+      expect(multiPayload.params.actions.length).toBe(2);
+      expect(multiPayload.params.actions[0].action).toBe('clearNotesTags');
+      expect(multiPayload.params.actions[1].action).toBe('addTags');
+      expect((multiPayload.params.actions[1] as AddTagsAction).params.tags).toBe('new-tag-only');
+      expect(result).toEqual([null, null]);
+    });
+
+    it('should return empty object when no updates are needed', async () => {
+        // Setup a test card that matches Anki
+        const cards = [
+          new Flashcard(
+            11223,
+            'Test Deck',
+            'No Change Question\n?\nNo Change Answer',
+            { Front: 'No Change Question', Back: 'No Change Answer' },
+            false, 0, 0, ['no-change-tag'], true, [], false
+          )
+        ];
+  
+        mockXHR.send.mockImplementation(() => {
+          // notesInfo succeeds - note matches exactly
+          mockXHR.responseText = JSON.stringify({
+            result: [{
+              noteId: 11223,
+              tags: ['no-change-tag'],
+              fields: { Front: { value: 'No Change Question' }, Back: { value: 'No Change Answer' } },
+              modelName: 'Obsidian-basic', cards: [44444]
+            }], error: null
+          });
+          mockXHR.triggerLoad();
+        });
+  
+        const result = await anki.updateCards(cards);
+        expect(mockXHR.send).toHaveBeenCalledTimes(1); // Only notesInfo called
+        expect(result).toEqual({}); // Should return empty object
+      });
+
+    it('should return empty object when no cards are provided', async () => {
+        const result = await anki.updateCards([]);
+        expect(mockXHR.send).not.toHaveBeenCalled();
+        expect(result).toEqual({});
+      });
+
   });
   
   describe('ping', () => {
@@ -572,79 +794,88 @@ describe('Anki Service', () => {
   });
 
   describe('createModels', () => {
-    it('should create models with source support but without code highlighting', async () => {
-      // Mock the send method to return a successful response
-      mockXHR.send.mockImplementation(() => {
-        mockXHR.responseText = JSON.stringify({
-          result: true,
-          error: null
-        });
-        mockXHR.triggerLoad();
-      });
-      
-      // Call createModels with sourceSupport=true, codeHighlightSupport=false
-      const result = await anki.createModels(true, false);
-      
-      // Verify the request
-      expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
-      expect(mockXHR.send).toHaveBeenCalled();
-      
-      // Verify the request payload contained a multi action with models
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
-      expect(payload.action).toBe('multi');
-      expect(payload.version).toBe(6);
-      expect(Array.isArray(payload.params.actions)).toBe(true);
-      
-      // Verify the result
-      expect(result).toBe(true);
+    // Helper to create mock model parameters
+    const mockModelParams = (
+      name: string,
+      isCloze: boolean = false
+    ): CreateModelParams => ({
+      modelName: name,
+      inOrderFields: isCloze ? ['Text', 'Extra'] : ['Front', 'Back'],
+      css: 'some css',
+      isCloze: isCloze,
+      cardTemplates: [
+        {
+          Name: 'Card 1',
+          Front: isCloze ? '{{cloze:Text}}' : '{{Front}}',
+          Back: isCloze ? '{{cloze:Text}}{{Extra}}' : '{{FrontSide}}<hr>{{Back}}',
+        },
+      ],
     });
-    
-    it('should create models with both source support and code highlighting', async () => {
-      // Mock the send method to return a successful response
-      mockXHR.send.mockImplementation(() => {
-        mockXHR.responseText = JSON.stringify({
-          result: true,
-          error: null
-        });
-        mockXHR.triggerLoad();
-      });
+
+    it('should resolve successfully when models are created without error', async () => {
+      // Mock the invoke method to return a successful response for multi
+      // Assumes invoke is called internally by createModels
+      const invokeSpy = jest.spyOn(anki as any, 'invoke').mockResolvedValue([null, null]);
+
+      await expect(anki.createModels(true, true)).resolves.toBeUndefined();
+
+      // Verify invoke was called correctly (with 'multi' and 'createModel' actions)
+      expect(invokeSpy).toHaveBeenCalledWith(
+        'multi',
+        6,
+        expect.objectContaining({
+          actions: expect.arrayContaining([
+            expect.objectContaining({ action: 'createModel' }),
+            expect.objectContaining({ action: 'createModel' }),
+            expect.objectContaining({ action: 'createModel' }),
+            expect.objectContaining({ action: 'createModel' }),
+            expect.objectContaining({ action: 'createModel' }),
+            expect.objectContaining({ action: 'createModel' })
+          ])
+        })
+      );
       
-      // Call createModels with sourceSupport=true, codeHighlightSupport=true
-      const result = await anki.createModels(true, true);
-      
-      // Verify more actions are included when code highlighting is enabled
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
-      expect(payload.action).toBe('multi');
-      
-      // Should contain more actions when code highlighting is enabled
-      const actionsWithCodeHighlight = payload.params.actions.length;
-      
-      // Reset and test without code highlighting
-      jest.clearAllMocks();
-      await anki.createModels(true, false);
-      const payloadWithoutCode = JSON.parse(mockXHR.send.mock.calls[0][0]);
-      const actionsWithoutCodeHighlight = payloadWithoutCode.params.actions.length;
-      
-      // Should have more actions with code highlighting
-      expect(actionsWithCodeHighlight).toBeGreaterThan(actionsWithoutCodeHighlight);
-      
-      // Verify the result
-      expect(result).toBe(true);
+      invokeSpy.mockRestore();
     });
-    
-    it('should handle error from Anki when creating models', async () => {
-      // Mock the send method to return an error response
-      mockXHR.send.mockImplementation(() => {
-        mockXHR.responseText = JSON.stringify({
-          result: null,
-          error: 'Failed to create models'
-        });
-        mockXHR.triggerLoad();
-      });
-      
-      // Expect an error when calling createModels
-      await expect(anki.createModels(true, false)).rejects.toEqual('Failed to create models');
+
+    it('should reject if the multi invoke call fails (network error)', async () => {
+      const invokeSpy = jest.spyOn(anki as any, 'invoke').mockRejectedValue('Network Error');
+
+      await expect(anki.createModels(true, true)).rejects.toEqual('Network Error');
+
+      expect(invokeSpy).toHaveBeenCalled();
+      invokeSpy.mockRestore();
     });
+
+    it('should reject if the multi invoke call returns an Anki error object', async () => {
+      const invokeSpy = jest.spyOn(anki as any, 'invoke').mockResolvedValue({ error: 'Anki Busy' }); // Simulate error object instead of result array
+
+      // Depending on invoke implementation, this might reject or throw within createModels
+      // Let's assume it rejects the promise returned by createModels
+      // Updated expectation to match the thrown error string
+      await expect(anki.createModels(true, true)).rejects.toEqual('Anki Busy');
+
+      expect(invokeSpy).toHaveBeenCalled();
+      invokeSpy.mockRestore();
+    });
+
+    it('should reject if the multi invoke call result contains an error for any model', async () => {
+      const invokeSpy = jest.spyOn(anki as any, 'invoke').mockResolvedValue([
+        null, // Model 1 OK
+        { error: 'Model 2 failed' }, // Model 2 Error
+        null, // Model 3 OK
+        null,
+        null,
+        null
+      ]);
+
+      // Expect rejection if any part of the multi action failed
+      await expect(anki.createModels(true, true)).rejects.toEqual({ error: 'Model 2 failed' });
+
+      expect(invokeSpy).toHaveBeenCalled();
+      invokeSpy.mockRestore();
+    });
+
   });
   
   describe('createDeck', () => {
@@ -665,7 +896,7 @@ describe('Anki Service', () => {
       expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
       
       // Verify the payload
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
+      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiCreateDeckPayload;
       expect(payload.action).toBe('createDeck');
       expect(payload.params.deck).toBe('Test Deck');
       
@@ -685,256 +916,401 @@ describe('Anki Service', () => {
       
       // Expect an error when calling createDeck
       await expect(anki.createDeck('Test Deck')).rejects.toEqual('Failed to create deck');
+      
+      // Verify payload was still sent correctly
+      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiCreateDeckPayload;
+      expect(payload.action).toBe('createDeck');
+      expect(payload.params.deck).toBe('Test Deck');
     });
   });
   
   describe('storeMediaFiles', () => {
-    it('should store media files for cards', async () => {
-      // Create a test card with media
-      const card = new Flashcard(
-        -1,
-        'Test Deck',
-        'Test Question with image',
-        { Front: 'Test Question with image', Back: 'Test Answer' },
-        false,
-        0,
-        0,
-        ['test'],
-        false,
-        ['image.png'], // Media files
-        false
-      );
-      
-      // Mock the getMedias method
-      card.getMedias = jest.fn().mockReturnValue([
-        { filename: 'image.png', data: 'base64data' }
+    let mockCard: Card;
+
+    beforeEach(() => {
+      // Provide all 11 arguments for Flashcard constructor
+      // id, deckName, initialContent, fields, inserted, positionStart, positionEnd, tags, containsCode, mediaNames, reversed
+      mockCard = new Flashcard(
+        -1,               // id
+        'deck',           // deckName
+        'Q',              // initialContent (can be minimal for this test)
+        { Front: 'Q', Back: 'A' }, // fields
+        false,            // inserted
+        0,                // positionStart
+        1,                // positionEnd
+        ['tag'],          // tags
+        false,            // containsCode
+        ['image.jpg', 'sound.mp3'], // mediaNames (match getMedias mock below)
+        false             // reversed
+      ); 
+      jest.spyOn(mockCard, 'getMedias').mockReturnValue([
+        { filename: 'image.jpg', data: 'base64data1' },
+        { filename: 'sound.mp3', data: 'base64data2' },
       ]);
+    });
+
+    test('should send correct multi action and return typed result on success', async () => {
+      const expectedActions = [
+        { action: 'storeMediaFile', params: { filename: 'image.jpg', data: 'base64data1' } },
+        { action: 'storeMediaFile', params: { filename: 'sound.mp3', data: 'base64data2' } },
+      ];
+      const mockAnkiResponse: AnkiStoreMediaResult = [null, null]; 
       
-      // Mock the send method to return a successful response
-      mockXHR.send.mockImplementation(() => {
-        mockXHR.responseText = JSON.stringify({
-          result: [true], // Success for each media file
-          error: null
-        });
-        mockXHR.triggerLoad();
+      mockXHR.send.mockImplementationOnce(() => {
+        mockXHR.responseText = JSON.stringify({ result: mockAnkiResponse, error: null });
+        mockXHR.triggerLoad(); 
       });
+
+      const resultPromise = anki.storeMediaFiles([mockCard]);
+      await Promise.resolve(); 
+      const result = await resultPromise;
+
+      expect(mockXHR.send).toHaveBeenCalledTimes(1);
+      const requestBody = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiStoreMediaMultiPayload; 
+      expect(requestBody.action).toBe('multi');
+      expect(requestBody.params.actions).toEqual(expectedActions);
+      expect(result).toEqual(mockAnkiResponse); // Failing assertion (TDD)
+    });
+
+    test('should return empty object if no media files', async () => {
+      jest.spyOn(mockCard, 'getMedias').mockReturnValue([]);
+      const result = await anki.storeMediaFiles([mockCard]);
+      expect(mockXHR.send).not.toHaveBeenCalled(); 
+      expect(result).toEqual({}); // Should pass
+    });
+
+    test('should handle AnkiConnect error during multi call', async () => {
+      const errorMsg = 'Failed to store media'; // Expected error message
       
-      // Call storeMediaFiles
-      const result = await anki.storeMediaFiles([card]);
-      
-      // Verify the request
-      expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
-      
-      // Verify the payload
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
-      expect(payload.action).toBe('multi');
-      expect(payload.params.actions[0].action).toBe('storeMediaFile');
-      expect(payload.params.actions[0].params.filename).toBe('image.png');
-      
-      // Verify the result
-      expect(result).toEqual([true]);
+      mockXHR.send.mockImplementationOnce(() => {
+        // Trigger error without argument
+        mockXHR.triggerError(); 
+      });
+
+      const resultPromise = anki.storeMediaFiles([mockCard]);
+      await Promise.resolve(); 
+
+      // Check rejection - Anki invoke usually rejects with the specific error string from response or "failed to issue request"
+      // Adjusting expectation based on invoke logic
+      await expect(resultPromise).rejects.toBe('failed to issue request'); 
+      expect(mockXHR.send).toHaveBeenCalledTimes(1);
     });
     
-    /* Commenting out this test as it causes timeouts
-    it('should handle empty media list gracefully', async () => {
-      // Skip creating an actual card instance, just pass an empty array directly
-      const result = await anki.storeMediaFiles([]);
+    test('should handle partial success/errors in multi response', async () => {
+      const mockAnkiResponse: AnkiStoreMediaResult = [null, 'Error storing sound.mp3']; 
       
-      // No API call should be made when there are no cards
-      expect(mockXHR.send).not.toHaveBeenCalled();
-      
-      // Result should be an empty object
-      expect(result).toEqual({});
+      mockXHR.send.mockImplementationOnce(() => {
+        mockXHR.responseText = JSON.stringify({ result: mockAnkiResponse, error: null });
+        mockXHR.triggerLoad(); 
+      });
+
+      const resultPromise = anki.storeMediaFiles([mockCard]);
+      await Promise.resolve();
+      const result = await resultPromise;
+
+      expect(mockXHR.send).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(mockAnkiResponse); // Failing assertion (TDD)
     });
-    */
   });
   
   describe('storeCodeHighlightMedias', () => {
-    it('should store code highlight media files when they do not exist', async () => {
-      // First call to check if files exist
-      let callCount = 0;
-      mockXHR.send.mockImplementation(() => {
-        callCount++;
-        
-        if (callCount === 1) {
-          // First call: check if file exists, return false
-          mockXHR.responseText = JSON.stringify({
-            result: false, // File does not exist
-            error: null
-          });
-        } else {
-          // Second call: store media files, return success
-          mockXHR.responseText = JSON.stringify({
-            result: [true, true, true], // Success for each file
-            error: null
-          });
-        }
-        
+    test('should send multi action if highlight file does not exist', async () => {
+      // Mock retrieveMediaFile call (file doesn't exist -> returns null)
+      mockXHR.send.mockImplementationOnce(() => {
+        mockXHR.responseText = JSON.stringify({ result: null, error: null });
         mockXHR.triggerLoad();
       });
       
-      // Call storeCodeHighlightMedias
-      const result = await anki.storeCodeHighlightMedias();
+      // Mock multi call for storing files (success -> returns array of nulls)
+      const mockMultiResponse: AnkiStoreMediaResult = [null, null, null];
+       mockXHR.send.mockImplementationOnce(() => {
+        mockXHR.responseText = JSON.stringify({ result: mockMultiResponse, error: null });
+        mockXHR.triggerLoad();
+      });
+
+      const resultPromise = anki.storeCodeHighlightMedias();
+      await Promise.resolve(); // After retrieve call
+      await Promise.resolve(); // After multi call
+      const result = await resultPromise;
+
+      expect(mockXHR.send).toHaveBeenCalledTimes(2); 
       
-      // Verify two calls were made
-      expect(mockXHR.send).toHaveBeenCalledTimes(2);
-      
-      // First call should check if _highlightInit.js exists
-      const firstPayload = JSON.parse(mockXHR.send.mock.calls[0][0]);
-      expect(firstPayload.action).toBe('retrieveMediaFile');
-      expect(firstPayload.params.filename).toBe('_highlightInit.js');
-      
-      // Second call should store the media files
-      const secondPayload = JSON.parse(mockXHR.send.mock.calls[1][0]);
-      expect(secondPayload.action).toBe('multi');
-      expect(secondPayload.params.actions.length).toBe(3); // Should store 3 files
-      
-      // Verify file types
-      const filenames = secondPayload.params.actions.map((a: any) => a.params.filename);
-      expect(filenames).toContain('_highlight.js');
-      expect(filenames).toContain('_highlightInit.js');
-      expect(filenames).toContain('_highlight.css');
-      
-      // Verify the result
-      expect(result).toEqual([true, true, true]);
+      const firstRequestBody = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiRetrieveMediaPayload;
+      expect(firstRequestBody.action).toBe('retrieveMediaFile');
+      expect(firstRequestBody.params.filename).toBe('_highlightInit.js');
+
+      const secondRequestBody = JSON.parse(mockXHR.send.mock.calls[1][0]) as AnkiStoreMediaMultiPayload;
+      expect(secondRequestBody.action).toBe('multi');
+      expect(secondRequestBody.params.actions).toHaveLength(3);
+      expect(secondRequestBody.params.actions[0].action).toBe('storeMediaFile');
+      expect(secondRequestBody.params.actions[0].params.filename).toBe('_highlight.js');
+
+      expect(result).toEqual(mockMultiResponse); // Failing assertion (TDD)
+    });
+
+    test('should do nothing and return void if highlight file exists', async () => {
+       mockXHR.send.mockImplementationOnce(() => {
+          mockXHR.responseText = JSON.stringify({ result: 'some_base64_data', error: null });
+          mockXHR.triggerLoad();
+       });
+
+      const resultPromise = anki.storeCodeHighlightMedias();
+      await Promise.resolve(); 
+      const result = await resultPromise;
+
+      expect(mockXHR.send).toHaveBeenCalledTimes(1); 
+      const requestBody = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiRetrieveMediaPayload;
+      expect(requestBody.action).toBe('retrieveMediaFile');
+      expect(result).toBeUndefined(); // Should pass
+    });
+
+    test('should handle error during retrieveMediaFile call', async () => {
+       mockXHR.send.mockImplementationOnce(() => {
+          // Trigger error without argument
+          mockXHR.triggerError(); 
+       });
+
+      const resultPromise = anki.storeCodeHighlightMedias();
+      await Promise.resolve();
+
+      // Check rejection reason based on invoke logic
+      await expect(resultPromise).rejects.toBe('failed to issue request');
+      expect(mockXHR.send).toHaveBeenCalledTimes(1);
     });
     
-    it('should not store code highlight media files when they already exist', async () => {
-      // Mock the send method to return that file exists
-      mockXHR.send.mockImplementation(() => {
-        mockXHR.responseText = JSON.stringify({
-          result: true, // File exists
-          error: null
-        });
-        mockXHR.triggerLoad();
-      });
-      
-      // Call storeCodeHighlightMedias
-      const result = await anki.storeCodeHighlightMedias();
-      
-      // Verify only one call was made (to check existence)
-      expect(mockXHR.send).toHaveBeenCalledTimes(1);
-      
-      // No result is returned when files already exist
-      expect(result).toBeUndefined();
+    test('should handle error during multi call for storing files', async () => {
+       // Mock retrieveMediaFile call (file doesn't exist)
+       mockXHR.send.mockImplementationOnce(() => {
+          mockXHR.responseText = JSON.stringify({ result: null, error: null });
+          mockXHR.triggerLoad();
+       });
+       
+      // Mock multi call failure
+       mockXHR.send.mockImplementationOnce(() => {
+          // Trigger error without argument
+          mockXHR.triggerError();
+       });
+
+       const resultPromise = anki.storeCodeHighlightMedias();
+       await Promise.resolve(); // After retrieve
+       await Promise.resolve(); // After multi error
+
+       // Check rejection reason
+      await expect(resultPromise).rejects.toBe('failed to issue request');
+      expect(mockXHR.send).toHaveBeenCalledTimes(2); 
     });
   });
   
   describe('changeDeck', () => {
-    it('should change cards to a different deck', async () => {
-      // Mock the send method to return a successful response
+    it('should change cards to a different deck successfully and return null', async () => {
+      const cardIdsToChange = [12345, 67890];
+      const targetDeck = 'New Deck';
+
+      // Mock the send method to return a successful response (result: null)
       mockXHR.send.mockImplementation(() => {
         mockXHR.responseText = JSON.stringify({
-          result: true,
+          result: null, // changeDeck returns null on success
           error: null
         });
         mockXHR.triggerLoad();
       });
-      
-      // Call changeDeck
-      const result = await anki.changeDeck([12345, 67890], 'New Deck');
-      
+
+      // Call changeDeck - THIS IS THE TDD STEP: Expecting Promise<null>
+      const result = await anki.changeDeck(cardIdsToChange, targetDeck);
+
       // Verify the request
       expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
-      
+
       // Verify the payload
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
+      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiChangeDeckPayload;
       expect(payload.action).toBe('changeDeck');
-      expect(payload.params.cards).toEqual([12345, 67890]);
-      expect(payload.params.deck).toBe('New Deck');
-      
-      // Verify the result
-      expect(result).toBe(true);
+      expect(payload.params.cards).toEqual(cardIdsToChange);
+      expect(payload.params.deck).toBe(targetDeck);
+
+      // Verify the result type and value
+      expect(result).toBeNull(); // Asserting null based on common AnkiConnect pattern
     });
-    
+
     it('should handle error when changing decks', async () => {
+      const cardIdsToChange = [12345];
+      const targetDeck = 'New Deck';
+      const errorMsg = 'Failed to change deck';
+
       // Mock the send method to return an error response
       mockXHR.send.mockImplementation(() => {
         mockXHR.responseText = JSON.stringify({
           result: null,
-          error: 'Failed to change deck'
+          error: errorMsg
         });
         mockXHR.triggerLoad();
       });
-      
+
       // Expect an error when calling changeDeck
-      await expect(anki.changeDeck([12345], 'New Deck')).rejects.toEqual('Failed to change deck');
+      await expect(anki.changeDeck(cardIdsToChange, targetDeck)).rejects.toEqual(errorMsg);
+
+       // Verify the request payload was still sent correctly
+       const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiChangeDeckPayload;
+       expect(payload.action).toBe('changeDeck');
+       expect(payload.params.cards).toEqual(cardIdsToChange);
+       expect(payload.params.deck).toBe(targetDeck);
     });
+
+    // Add test for network error
+    it('should handle network error when changing decks', async () => {
+        const cardIdsToChange = [12345];
+        const targetDeck = 'New Deck';
+  
+        // Mock the send method to trigger the error callback
+        mockXHR.send.mockImplementation(() => {
+          mockXHR.triggerError();
+        });
+  
+        // Expect the method to throw the generic network error
+        await expect(anki.changeDeck(cardIdsToChange, targetDeck)).rejects.toEqual('failed to issue request');
+  
+        // Verify that the correct request was attempted
+        expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
+        expect(mockXHR.send).toHaveBeenCalled();
+        const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiChangeDeckPayload;
+        expect(payload.action).toBe('changeDeck');
+        expect(payload.params.cards).toEqual(cardIdsToChange);
+        expect(payload.params.deck).toBe(targetDeck);
+      });
   });
   
   describe('cardsInfo', () => {
-    it('should retrieve information about cards', async () => {
-      // Mock card info response
-      const mockCardInfo = [
-        { cardId: 12345, deckName: 'Test Deck', question: 'Question 1', answer: 'Answer 1' }
-      ];
-      
-      // Mock the send method to return card info
+    const cardIds = [12345, 67890];
+    const mockCardInfoResponse: AnkiCardInfo[] = [
+      {
+        answer: 'Answer 1',
+        question: 'Question 1',
+        deckName: 'Test Deck',
+        modelName: 'Basic',
+        fieldOrder: 0,
+        fields: {
+          Front: { value: 'Question 1', order: 0 },
+          Back: { value: 'Answer 1', order: 1 },
+        },
+        cardId: 12345,
+        note: 11111,
+        tags: ['tag1'],
+      },
+      {
+        answer: 'Answer 2',
+        question: 'Question 2',
+        deckName: 'Test Deck',
+        modelName: 'Basic',
+        fieldOrder: 0,
+        fields: {
+          Front: { value: 'Question 2', order: 0 },
+          Back: { value: 'Answer 2', order: 1 },
+        },
+        cardId: 67890,
+        note: 22222,
+        tags: ['tag2'],
+      },
+    ];
+
+    it('should return card information successfully', async () => {
+      // Mock the send method to trigger the load callback with a successful response
       mockXHR.send.mockImplementation(() => {
         mockXHR.responseText = JSON.stringify({
-          result: mockCardInfo,
-          error: null
+          result: mockCardInfoResponse,
+          error: null,
         });
         mockXHR.triggerLoad();
       });
-      
-      // Call cardsInfo
-      const result = await anki.cardsInfo([12345]);
-      
-      // Verify the request
+
+      const result = await anki.cardsInfo(cardIds);
+
+      // Verify the result matches the expected type and data
+      expect(result).toEqual(mockCardInfoResponse);
+
+      // Verify the correct AnkiConnect action was called
       expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
-      
-      // Verify the payload
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
-      expect(payload.action).toBe('cardsInfo');
-      expect(payload.params.cards).toEqual([12345]);
-      
-      // Verify the result
-      expect(result).toEqual(mockCardInfo);
+      expect(mockXHR.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          action: 'cardsInfo',
+          version: 6,
+          params: { cards: cardIds },
+        })
+      );
     });
-    
-    it('should handle error when retrieving card info', async () => {
-      // Mock the send method to return an error response
+
+    it('should handle Anki API errors when fetching card info', async () => {
+      const errorMessage = 'Anki connect error: invalid card ids';
+      // Mock the send method to trigger the load callback with an error response
       mockXHR.send.mockImplementation(() => {
         mockXHR.responseText = JSON.stringify({
           result: null,
-          error: 'Failed to get card info'
+          error: errorMessage,
         });
         mockXHR.triggerLoad();
       });
-      
-      // Expect an error when calling cardsInfo
-      await expect(anki.cardsInfo([12345])).rejects.toEqual('Failed to get card info');
+
+      // Expect the cardsInfo method to throw the specific Anki error
+      await expect(anki.cardsInfo(cardIds)).rejects.toEqual(errorMessage);
+
+      // Verify the correct AnkiConnect action was attempted
+      expect(mockXHR.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          action: 'cardsInfo',
+          version: 6,
+          params: { cards: cardIds },
+        })
+      );
+    });
+
+    it('should handle network errors when fetching card info', async () => {
+      // Mock the send method to trigger the error callback
+      mockXHR.send.mockImplementation(() => {
+        mockXHR.triggerError();
+      });
+
+      // Expect the cardsInfo method to throw a network error
+      await expect(anki.cardsInfo(cardIds)).rejects.toEqual('failed to issue request');
+
+      // Verify the correct AnkiConnect action was attempted
+      expect(mockXHR.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          action: 'cardsInfo',
+          version: 6,
+          params: { cards: cardIds },
+        })
+      );
     });
   });
   
   describe('deleteCards', () => {
-    it('should delete cards by their IDs', async () => {
-      // Mock the send method to return a successful response
+    it('should delete cards successfully', async () => {
+      const cardIdsToDelete = [12345, 67890];
+      
+      // Mock the send method to return a successful response (deleteNotes returns null)
       mockXHR.send.mockImplementation(() => {
         mockXHR.responseText = JSON.stringify({
-          result: true,
+          result: null,
           error: null
         });
         mockXHR.triggerLoad();
       });
       
       // Call deleteCards
-      const result = await anki.deleteCards([12345, 67890]);
+      await anki.deleteCards(cardIdsToDelete);
       
       // Verify the request
       expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
       
       // Verify the payload
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
+      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiDeleteNotesPayload;
       expect(payload.action).toBe('deleteNotes');
-      expect(payload.params.notes).toEqual([12345, 67890]);
+      expect(payload.params.notes).toEqual(cardIdsToDelete);
       
-      // Verify the result
-      expect(result).toBe(true);
+      // No explicit return value check needed as deleteNotes returns null
     });
     
     it('should handle error when deleting cards', async () => {
+      const cardIdsToDelete = [12345, 67890];
+      
       // Mock the send method to return an error response
       mockXHR.send.mockImplementation(() => {
         mockXHR.responseText = JSON.stringify({
@@ -945,7 +1321,12 @@ describe('Anki Service', () => {
       });
       
       // Expect an error when calling deleteCards
-      await expect(anki.deleteCards([12345])).rejects.toEqual('Failed to delete notes');
+      await expect(anki.deleteCards(cardIdsToDelete)).rejects.toEqual('Failed to delete notes');
+      
+      // Verify payload was still sent correctly
+      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiDeleteNotesPayload;
+      expect(payload.action).toBe('deleteNotes');
+      expect(payload.params.notes).toEqual(cardIdsToDelete);
     });
   });
   
@@ -967,7 +1348,7 @@ describe('Anki Service', () => {
       expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
       
       // Verify the payload
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
+      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiFindNotesPayload;
       expect(payload.action).toBe('findNotes');
       expect(payload.params.query).toBe('deck:Test');
       
@@ -1008,12 +1389,12 @@ describe('Anki Service', () => {
       expect(mockXHR.send).toHaveBeenCalledTimes(2);
       
       // First call should be findNotes with the correct deck query
-      const firstPayload = JSON.parse(mockXHR.send.mock.calls[0][0]);
+      const firstPayload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiFindNotesPayload;
       expect(firstPayload.action).toBe('findNotes');
       expect(firstPayload.params.query).toBe('deck:"Test Deck"');
       
       // Second call should be notesInfo with the found IDs
-      const secondPayload = JSON.parse(mockXHR.send.mock.calls[1][0]);
+      const secondPayload = JSON.parse(mockXHR.send.mock.calls[1][0]) as AnkiNotesInfoPayload;
       expect(secondPayload.action).toBe('notesInfo');
       expect(secondPayload.params.notes).toEqual([12345, 67890]);
       
@@ -1045,11 +1426,18 @@ describe('Anki Service', () => {
   });
   
   describe('requestPermission', () => {
-    it('should request permission from AnkiConnect', async () => {
-      // Mock the send method to return a successful response
+    it('should request permission from AnkiConnect and return typed response', async () => {
+      // Define the mock successful response using the new type
+      const mockPermissionResponse: AnkiPermissionResponse = {
+        permission: 'granted',
+        requireApiKey: false,
+        version: 6
+      };
+      
+      // Mock the send method to return the successful typed response
       mockXHR.send.mockImplementation(() => {
         mockXHR.responseText = JSON.stringify({
-          result: { permission: 'granted' },
+          result: mockPermissionResponse,
           error: null
         });
         mockXHR.triggerLoad();
@@ -1062,11 +1450,13 @@ describe('Anki Service', () => {
       expect(mockXHR.open).toHaveBeenCalledWith('POST', 'http://127.0.0.1:8765');
       
       // Verify the payload
-      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]);
+      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiRequestPermissionPayload;
       expect(payload.action).toBe('requestPermission');
+      expect(payload.version).toBe(6);
+      expect(payload.params).toEqual({}); // No params for requestPermission
       
-      // Verify the result
-      expect(result).toEqual({ permission: 'granted' });
+      // Verify the result matches the typed mock response
+      expect(result).toEqual(mockPermissionResponse);
     });
     
     it('should handle error when requesting permission', async () => {
@@ -1081,6 +1471,12 @@ describe('Anki Service', () => {
       
       // Expect an error when calling requestPermission
       await expect(anki.requestPermission()).rejects.toEqual('Failed to request permission');
+      
+      // Verify payload was still sent correctly
+      const payload = JSON.parse(mockXHR.send.mock.calls[0][0]) as AnkiRequestPermissionPayload;
+      expect(payload.action).toBe('requestPermission');
+      expect(payload.version).toBe(6);
+      expect(payload.params).toEqual({}); // No params for requestPermission
     });
   });
 }); 

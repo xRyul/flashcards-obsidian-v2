@@ -9,73 +9,113 @@ import {
   codeDeckExtension,
   sourceDeckExtension,
 } from "src/conf/constants";
+import { AnkiNoteInfo, AnkiUpdateAction, CreateModelAction, StoreMediaAction, AnkiStoreMediaResult } from "src/types/anki";
+import { arraysEqual } from "src/utils";
+import {
+  AnkiNote,
+  AnkiActionParams,
+  AnkiCardInfo,
+  AnkiPermissionResponse,
+  UpdateNoteFieldsAction,
+} from "src/types/anki";
 
 export class Anki {
   public async createModels(
     sourceSupport: boolean,
     codeHighlightSupport: boolean
-  ) {
+  ): Promise<void> {
     let models = this.getModels(sourceSupport, false);
     if (codeHighlightSupport) {
       models = models.concat(this.getModels(sourceSupport, true));
     }
 
-    return this.invoke("multi", 6, { actions: models });
+    const actions: CreateModelAction[] = models.map(modelParams => ({
+      action: "createModel",
+      params: modelParams as any
+    }));
+
+    try {
+      const results = await this.invoke("multi", 6, { actions: actions });
+      if (results && typeof results === 'object' && !Array.isArray(results) && results.error) {
+        throw results.error;
+      }
+      if (Array.isArray(results)) {
+        for (const result of results) {
+          if (result !== null) {
+            throw result;
+          }
+        }
+        return;
+      } else {
+        throw new Error("Unexpected response structure from Anki multi action");
+      }
+    } catch (error) {
+      console.error("Error creating Anki models:", error);
+      throw error;
+    }
   }
 
   public async createDeck(deckName: string): Promise<any> {
     return this.invoke("createDeck", 6, { deck: deckName });
   }
 
-  public async storeMediaFiles(cards: Card[]) {
-    const actions: any[] = [];
+  public async storeMediaFiles(cards: Card[]): Promise<AnkiStoreMediaResult | {}> {
+    const actions: StoreMediaAction[] = [];
 
     for (const card of cards) {
-      for (const media of card.getMedias()) {
+      for (const media of card.getMedias() as { filename: string, data: string }[]) {
         actions.push({
           action: "storeMediaFile",
-          params: media,
+          params: { 
+            filename: media.filename,
+            data: media.data
+          },
         });
       }
     }
 
-    if (actions) {
-      return this.invoke("multi", 6, { actions: actions });
+    if (actions.length > 0) {
+      const result = await this.invoke("multi", 6, { actions: actions });
+      return result as AnkiStoreMediaResult;
     } else {
       return {};
     }
   }
 
-  public async storeCodeHighlightMedias() {
-    const fileExists = await this.invoke("retrieveMediaFile", 6, {
+  public async storeCodeHighlightMedias(): Promise<AnkiStoreMediaResult | void> {
+    const fileExistsResult = await this.invoke("retrieveMediaFile", 6, {
       filename: "_highlightInit.js",
     });
+    const fileExists = fileExistsResult !== null && fileExistsResult !== false;
 
     if (!fileExists) {
-      const highlightjs = {
-        action: "storeMediaFile",
-        params: {
-          filename: "_highlight.js",
-          data: highlightjsBase64,
+      const actions: StoreMediaAction[] = [
+        {
+          action: "storeMediaFile",
+          params: {
+            filename: "_highlight.js",
+            data: highlightjsBase64,
+          },
         },
-      };
-      const highlightjsInit = {
-        action: "storeMediaFile",
-        params: {
-          filename: "_highlightInit.js",
-          data: hihglightjsInitBase64,
+        {
+          action: "storeMediaFile",
+          params: {
+            filename: "_highlightInit.js",
+            data: hihglightjsInitBase64,
+          },
         },
-      };
-      const highlightjcss = {
-        action: "storeMediaFile",
-        params: {
-          filename: "_highlight.css",
-          data: highlightCssBase64,
+        {
+          action: "storeMediaFile",
+          params: {
+            filename: "_highlight.css",
+            data: highlightCssBase64,
+          },
         },
-      };
-      return this.invoke("multi", 6, {
-        actions: [highlightjs, highlightjsInit, highlightjcss],
+      ];
+      const result = await this.invoke("multi", 6, {
+        actions: actions, 
       });
+      return result as AnkiStoreMediaResult;
     }
   }
 
@@ -111,8 +151,8 @@ export class Anki {
    * @param cards the new cards.
    * @param deckName the new deck name.
    */
-  public async updateCards(cards: Card[]): Promise<any> {
-    const updateActions: any[] = [];
+  public async updateCards(cards: Card[]): Promise<null[] | {}> {
+    const updateActions: AnkiUpdateAction[] = [];
 
     for (const card of cards) {
       if (!card.id) {
@@ -121,25 +161,52 @@ export class Anki {
       }
 
       try {
-        // First verify the note exists
-        const noteInfo = await this.invoke("notesInfo", 6, {
-          notes: [card.id]
-        });
+        const noteInfoResult = await this.invoke("notesInfo", 6, { notes: [card.id] });
+        const noteInfoArr = noteInfoResult as AnkiNoteInfo[];
 
-        if (noteInfo && noteInfo.length > 0) {
-          // Update fields
-          updateActions.push({
-            action: "updateNoteFields",
-            params: {
-              note: {
-                id: card.id,
-                fields: card.fields
+        if (noteInfoArr && noteInfoArr.length > 0) {
+          const ankiNote = noteInfoArr[0];
+          let fieldsNeedUpdate = false;
+          let tagsNeedUpdate = false;
+
+          // Check if fields need update (compare field values)
+          for (const fieldName in card.fields) {
+            if (!ankiNote.fields[fieldName] || card.fields[fieldName] !== ankiNote.fields[fieldName].value) {
+              fieldsNeedUpdate = true;
+              break;
+            }
+          }
+          // Also check if Anki has extra fields not in the card (model change?)
+          if (!fieldsNeedUpdate) {
+            for (const fieldName in ankiNote.fields) {
+              if (!card.fields.hasOwnProperty(fieldName)) {
+                // This case shouldn't ideally happen if models match, but good to check
+                fieldsNeedUpdate = true; 
+                break;
               }
             }
-          });
+          }
 
-          // Update tags
-          if (card.tags && Array.isArray(card.tags)) {
+          // Check if tags need update
+          const currentTags = card.tags?.slice().sort() || [];
+          const ankiTags = ankiNote.tags?.slice().sort() || [];
+          if (!arraysEqual(currentTags, ankiTags)) {
+            tagsNeedUpdate = true;
+          }
+
+          if (fieldsNeedUpdate) {
+            updateActions.push({
+              action: "updateNoteFields",
+              params: {
+                note: {
+                  id: card.id,
+                  fields: card.fields
+                }
+              }
+            });
+          }
+
+          if (tagsNeedUpdate) {
             updateActions.push({
               action: "clearNotesTags",
               params: {
@@ -147,7 +214,7 @@ export class Anki {
               }
             });
 
-            if (card.tags.length > 0) {
+            if (card.tags && card.tags.length > 0) {
               updateActions.push({
                 action: "addTags",
                 params: {
@@ -167,9 +234,10 @@ export class Anki {
 
     if (updateActions.length > 0) {
       try {
-        return await this.invoke("multi", 6, {
+        const result = await this.invoke("multi", 6, {
           actions: updateActions
         });
+        return result as null[];
       } catch (error) {
         console.error("Error executing update actions:", error);
         throw error;
@@ -179,12 +247,18 @@ export class Anki {
     return Promise.resolve({});
   }
 
-  public async changeDeck(ids: number[], deckName: string) {
-    return await this.invoke("changeDeck", 6, { cards: ids, deck: deckName });
+  /**
+   * Change the deck for a list of cards.
+   * @param cardIds - List of card IDs to move.
+   * @param deckName - The target deck name.
+   * @returns A promise that resolves to null on success.
+   */
+  async changeDeck(cardIds: number[], deckName: string): Promise<null> {
+    return this.invoke('changeDeck', 6, { cards: cardIds, deck: deckName });
   }
 
-  public async cardsInfo(ids: number[]) {
-    return await this.invoke("cardsInfo", 6, { cards: ids });
+  public async cardsInfo(ids: number[]): Promise<AnkiCardInfo[]> {
+    return this.invoke("cardsInfo", 6, { cards: ids });
   }
 
   public async getCards(ids: number[]) {
@@ -220,7 +294,7 @@ export class Anki {
     return notesInfo;
   }
 
-  public async deleteCards(ids: number[]) {
+  public async deleteCards(ids: number[]): Promise<void> {
     return this.invoke("deleteNotes", 6, { notes: ids });
   }
 
@@ -381,8 +455,7 @@ export class Anki {
           },
         ],
       },
-
-    }
+    };
 
     const obsidianSpaced = {
       action: "createModel",
@@ -403,7 +476,7 @@ export class Anki {
     return [obsidianBasic, obsidianBasicReversed, obsidianCloze, obsidianSpaced];
   }
 
-  public async requestPermission() {
+  public async requestPermission(): Promise<AnkiPermissionResponse> {
     return this.invoke("requestPermission", 6);
   }
 }

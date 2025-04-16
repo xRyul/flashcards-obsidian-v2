@@ -1,5 +1,6 @@
 import { codeDeckExtension } from "src/conf/constants";
 import { arraysEqual } from "src/utils";
+import { AnkiNoteInfo, AnkiNote } from "../types/anki";
 
 export abstract class Card {
   id: number;
@@ -47,17 +48,17 @@ export abstract class Card {
   }
 
   abstract toString(): string;
-  abstract getCard(update: boolean): object;
+  abstract getCard(update: boolean): AnkiNote;
   abstract getMedias(): object[];
   abstract getIdFormat(): string;
 
-  match(card: any): boolean {
+  match(card: AnkiNoteInfo): boolean {
     // TODO not supported currently
     // if (this.modelName !== card.modelName) {
     //     return false
     // }
 
-    const fields : any = Object.entries(card.fields);
+    const fields: [string, { value: string; order: number }][] = Object.entries(card.fields);
     // This is the case of a switch from a model to another one. It cannot be handeled
     if (fields.length !== Object.entries(this.fields).length) {
       return false;
@@ -86,8 +87,8 @@ export abstract class Card {
    * @param ankiCard Anki card data object.
    * @returns True if the first field matches, false otherwise.
    */
-  looselyMatchesFrontField(ankiCard: any): boolean {
-    const ankiFields = Object.entries(ankiCard.fields);
+  looselyMatchesFrontField(ankiCard: AnkiNoteInfo): boolean {
+    const ankiFields: [string, { value: string; order: number }][] = Object.entries(ankiCard.fields);
     const thisFields = Object.entries(this.fields);
 
     // Basic check: ensure both have at least one field
@@ -98,8 +99,8 @@ export abstract class Card {
     // Assume the first field is the key for duplicate checks (like Anki often does)
     const ankiFirstFieldName = ankiFields[0][0];
     const thisFirstFieldName = thisFields[0][0]; // Usually 'Front'
-    const ankiFirstFieldValue = (ankiFields[0][1] as any)?.value;
-    const thisFirstFieldValue = thisFields[0][1]; 
+    const ankiFirstFieldValue = ankiFields[0][1].value;
+    const thisFirstFieldValue = thisFields[0][1];
 
     // Optional: Add logging here if needed for further debugging
     console.debug(`looselyMatchesFrontField: Comparing Anki[${ankiFirstFieldName}]='${(ankiFirstFieldValue ?? '').toString().substring(0,50)}...' with Plugin[${thisFirstFieldName}]='${thisFirstFieldValue.substring(0,50)}...'`);

@@ -2,6 +2,7 @@ import { Flashcard } from '../../src/entities/flashcard';
 import { Inlinecard } from '../../src/entities/inlinecard';
 import { Spacedcard } from '../../src/entities/spacedcard';
 import { Clozecard } from '../../src/entities/clozecard';
+import { AnkiNoteInfo } from '../../src/types/anki';
 
 describe('Entity Classes', () => {
     // Test Flashcard entity
@@ -234,7 +235,8 @@ describe('Entity Classes', () => {
                 false // containsCode
             );
 
-            const ankiCard = {
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 98765,
                 modelName: 'Different Model',
                 fields: {
                     Front: { value: 'Test Question', order: 0 },
@@ -616,7 +618,8 @@ describe('Entity Classes', () => {
                 false // containsCode
             );
 
-            const ankiCard = {
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 98765,
                 modelName: 'Basic',
                 fields: {
                     Front: { value: 'Test Question', order: 0 },
@@ -643,7 +646,8 @@ describe('Entity Classes', () => {
                 false // containsCode
             );
 
-            const ankiCard = {
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 98765,
                 modelName: 'Basic',
                 fields: {
                     Front: { value: 'Test Question', order: 0 },
@@ -670,7 +674,8 @@ describe('Entity Classes', () => {
                 false // containsCode
             );
 
-            const ankiCard = {
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 98765,
                 modelName: 'Basic',
                 fields: {
                     Front: { value: 'Test Question', order: 0 },
@@ -697,7 +702,8 @@ describe('Entity Classes', () => {
                 false // containsCode
             );
 
-            const ankiCard = {
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 98765,
                 modelName: 'Different Model',
                 fields: {
                     Front: { value: 'Test Question', order: 0 },
@@ -708,6 +714,119 @@ describe('Entity Classes', () => {
             };
 
             expect(card.match(ankiCard)).toBe(false);
+        });
+    });
+
+    // Add tests for looselyMatchesFrontField
+    describe('Card.looselyMatchesFrontField', () => {
+        it('should return true when the first field matches', () => {
+            const card = new Flashcard(
+                1, 'Deck', 'Q', { Front: 'Question', Back: 'Answer' }, false, 0, 10, [], true, [], false
+            );
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 101,
+                modelName: 'Basic',
+                fields: {
+                    Front: { value: 'Question', order: 0 },
+                    Back: { value: 'Different Answer', order: 1 } // Back differs, but Front matches
+                },
+                tags: []
+            };
+            expect(card.looselyMatchesFrontField(ankiCard)).toBe(true);
+        });
+
+        it('should return false when the first field name differs', () => {
+            const card = new Flashcard(
+                1, 'Deck', 'Q', { Front: 'Question', Back: 'Answer' }, false, 0, 10, [], true, [], false
+            );
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 101,
+                modelName: 'Basic',
+                fields: {
+                    DifferentFront: { value: 'Question', order: 0 }, // Different field name
+                    Back: { value: 'Answer', order: 1 }
+                },
+                tags: []
+            };
+            expect(card.looselyMatchesFrontField(ankiCard)).toBe(false);
+        });
+
+        it('should return false when the first field value differs', () => {
+            const card = new Flashcard(
+                1, 'Deck', 'Q', { Front: 'Question', Back: 'Answer' }, false, 0, 10, [], true, [], false
+            );
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 101,
+                modelName: 'Basic',
+                fields: {
+                    Front: { value: 'Different Question', order: 0 }, // Different value
+                    Back: { value: 'Answer', order: 1 }
+                },
+                tags: []
+            };
+            expect(card.looselyMatchesFrontField(ankiCard)).toBe(false);
+        });
+
+        it('should return false if the card has no fields', () => {
+            const card = new Flashcard(
+                1, 'Deck', 'Q', {}, false, 0, 10, [], true, [], false // Empty fields
+            );
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 101,
+                modelName: 'Basic',
+                fields: {
+                    Front: { value: 'Question', order: 0 },
+                    Back: { value: 'Answer', order: 1 }
+                },
+                tags: []
+            };
+            expect(card.looselyMatchesFrontField(ankiCard)).toBe(false);
+        });
+
+        it('should return false if the ankiCard has no fields', () => {
+            const card = new Flashcard(
+                1, 'Deck', 'Q', { Front: 'Question', Back: 'Answer' }, false, 0, 10, [], true, [], false
+            );
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 101,
+                modelName: 'Basic',
+                fields: {}, // Empty fields
+                tags: []
+            };
+            expect(card.looselyMatchesFrontField(ankiCard)).toBe(false);
+        });
+
+        // Test with Cloze card type to ensure first field logic works
+        it('should return true for Cloze cards when the first field (Text) matches', () => {
+            const card = new Clozecard(
+                1, 'Deck', 'Text {{c1::cloze}}', { Text: 'Text {{c1::cloze}}', Extra: '' }, false, 0, 10, [], true, [], false
+            );
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 101,
+                modelName: 'Cloze',
+                fields: {
+                    Text: { value: 'Text {{c1::cloze}}', order: 0 }, // Matches
+                    Extra: { value: 'Different Extra', order: 1 }
+                },
+                tags: []
+            };
+            expect(card.looselyMatchesFrontField(ankiCard)).toBe(true);
+        });
+
+        it('should return false for Cloze cards when the first field (Text) differs', () => {
+            const card = new Clozecard(
+                1, 'Deck', 'Text {{c1::cloze}}', { Text: 'Text {{c1::cloze}}', Extra: '' }, false, 0, 10, [], true, [], false
+            );
+            const ankiCard: AnkiNoteInfo = {
+                noteId: 101,
+                modelName: 'Cloze',
+                fields: {
+                    Text: { value: 'Different Text {{c1::cloze}}', order: 0 }, // Different value
+                    Extra: { value: '', order: 1 }
+                },
+                tags: []
+            };
+            expect(card.looselyMatchesFrontField(ankiCard)).toBe(false);
         });
     });
 }); 

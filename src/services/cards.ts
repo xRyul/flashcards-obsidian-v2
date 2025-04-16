@@ -13,6 +13,7 @@ import { arrayBufferToBase64 } from "src/utils";
 import { Regex } from "src/conf/regex";
 import { noticeTimeout } from "src/conf/constants";
 import { Inlinecard } from "src/entities/inlinecard";
+import { AnkiNoteInfo } from "src/types/anki";
 
 export class CardsService {
   private app: App;
@@ -356,12 +357,12 @@ export class CardsService {
   }
 
   public filterByUpdate(
-    allAnkiNotesInDeck: any, // Complete list for ID recovery
-    ankiNotesForIDsInFile: any, // List for IDs in file for update checks
+    allAnkiNotesInDeck: AnkiNoteInfo[], // Complete list for ID recovery (Typed)
+    ankiNotesForIDsInFile: AnkiNoteInfo[], // List for IDs in file for update checks (Typed)
     generatedCards: Card[], // All cards parsed from the file
     ankiIDsInFile: number[], // Explicit list of IDs found in the file by getAnkiIDsBlocks
     ankiBlocks: RegExpMatchArray[] // Pass the original blocks (though not used for direct removal here anymore)
-  ) {
+  ): [Card[], Card[], Card[]] {
     let cardsToCreate: Card[] = [];
     const cardsToUpdate: Card[] = [];
     const cardsNotInAnki: Card[] = [];
@@ -521,17 +522,17 @@ export class CardsService {
     return false;
   }
 
-  public getCardsIds(ankiCards: any, generatedCards: Card[]): number[] {
+  public getCardsIds(ankiCards: AnkiNoteInfo[], generatedCards: Card[]): number[] {
     let ids: number[] = [];
 
     if (ankiCards) {
       for (const flashcard of generatedCards) {
-        let ankiCard = undefined;
+        let ankiCard: AnkiNoteInfo | undefined = undefined;
         if (flashcard.inserted) {
           ankiCard = ankiCards.filter(
-            (card: any) => Number(card.noteId) === flashcard.id
+            (card: AnkiNoteInfo) => Number(card.noteId) === flashcard.id
           )[0];
-          if (ankiCard) {
+          if (ankiCard && ankiCard.cards) {
             ids = ids.concat(ankiCard.cards);
           }
         }

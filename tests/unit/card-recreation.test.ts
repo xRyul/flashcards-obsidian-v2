@@ -209,8 +209,8 @@ describe('Card Recreation Logic', () => {
             { 
                 noteId: 11111, 
                 fields: { 
-                    Front: { value: '<p>Existing Question</p>' },
-                    Back: { value: '<p>Existing Answer</p>' }
+                    Front: { value: '<p>Existing Question</p>', order: 0 },
+                    Back: { value: '<p>Existing Answer</p>', order: 1 }
                 },
                 modelName: 'Obsidian-basic',
                 tags: ['test']
@@ -284,8 +284,8 @@ describe('Card Recreation Logic', () => {
             { 
                 noteId: 33333, 
                 fields: { 
-                    Front: { value: '<p>Changed Question</p>' },
-                    Back: { value: '<p>Original Answer</p>' } // Different answer
+                    Front: { value: '<p>Changed Question</p>', order: 0 },
+                    Back: { value: '<p>Original Answer</p>', order: 1 }
                 },
                 modelName: 'Obsidian-basic',
                 tags: ['test'] // Missing the new-tag
@@ -369,8 +369,8 @@ describe('Card Recreation Logic', () => {
             { 
                 noteId: 44444, 
                 fields: { 
-                    Front: { value: '<p>Duplicate Question 1</p>' },
-                    Back: { value: '<p>Answer 1</p>' }
+                    Front: { value: '<p>Duplicate Question 1</p>', order: 0 },
+                    Back: { value: '<p>Answer 1</p>', order: 1 }
                 },
                 modelName: 'Obsidian-basic',
                 tags: ['test']

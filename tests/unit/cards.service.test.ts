@@ -6,6 +6,7 @@ import { TFile } from 'obsidian';
 import { ISettings } from '../../src/conf/settings';
 import { Card } from '../../src/entities/card';
 import { Regex } from '../../src/conf/regex';
+import { AnkiNoteInfo } from '../../src/types/anki';
 
 // Mocks
 jest.mock('../../src/services/anki');
@@ -104,20 +105,15 @@ describe('CardsService', () => {
                     isRoot: () => true
                 }
             } as TFile;
-            const fileContent = '# Test\n\nQuestion without ID\n?\nAnswer text';
+            const fileContent = '# Test\\n\\nQuestion without ID\\n?\\nAnswer text';
             
-            // Mock existing cards in Anki with specific content
-            const ankiNotes: Array<{
-                noteId: number;
-                fields: { [key: string]: { value: string } };
-                modelName: string;
-                tags: string[];
-            }> = [
+            // Mock existing cards in Anki with specific content (Explicitly typed)
+            const ankiNotes: AnkiNoteInfo[] = [
                 { 
                     noteId: 12345, 
                     fields: { 
-                        Front: { value: '<p>Question without ID</p>' },
-                        Back: { value: '<p>Answer text</p>' }
+                        Front: { value: '<p>Question without ID</p>', order: 0 },
+                        Back: { value: '<p>Answer text</p>', order: 1 }
                     },
                     modelName: 'Obsidian-basic',
                     tags: ['test']
@@ -128,13 +124,14 @@ describe('CardsService', () => {
             (cardsService as any).file = fileContent;
             
             // Mock Anki service to return our test notes
-            ankiService.getCards.mockResolvedValue(ankiNotes);
+            ankiService.getCards.mockResolvedValue(ankiNotes); // Mocking getCards, which populates ankiNotesForIDsInFile
+            ankiService.getNotesInDeck.mockResolvedValue(ankiNotes); // Mocking getNotesInDeck which populates allAnkiNotesInDeck
             
-            // Create a test card without ID that matches Anki content
-            const parsedCard = new Flashcard(
+            // Create a test card without ID that matches Anki content (Explicitly typed)
+            const parsedCard: Card = new Flashcard(
                 -1, // No ID
                 'Default',
-                'Question without ID\n?\nAnswer text',
+                'Question without ID\\n?\\nAnswer text',
                 { 
                     Front: '<p>Question without ID</p>', 
                     Back: '<p>Answer text</p>' 
@@ -150,10 +147,10 @@ describe('CardsService', () => {
             
             // Call the filterByUpdate method directly with our test data
             const result = cardsService.filterByUpdate(
-                ankiNotes,
-                ankiNotes,
+                ankiNotes, // Pass explicitly typed data
+                ankiNotes, // Pass explicitly typed data
                 [parsedCard],
-                [],
+                [], // No IDs found in file initially
                 []
             );
             
@@ -192,17 +189,12 @@ describe('CardsService', () => {
             (cardsService as any).updateFile = false;
             
             // Mock existing cards in Anki
-            const ankiNotes: Array<{
-                noteId: number;
-                fields: { [key: string]: { value: string } };
-                modelName: string;
-                tags: string[];
-            }> = [
+            const ankiNotesWithExisting: AnkiNoteInfo[] = [
                 { 
                     noteId: 67890, 
                     fields: { 
-                        Front: { value: '<p>Question with ID</p>' },
-                        Back: { value: '<p>Answer text</p>' }
+                        Front: { value: '<p>Question with ID</p>', order: 0 },
+                        Back: { value: '<p>Answer text</p>', order: 1 }
                     },
                     modelName: 'Obsidian-basic',
                     tags: ['test']
@@ -232,8 +224,8 @@ describe('CardsService', () => {
             
             // Call the filterByUpdate method directly with our test data
             const result = cardsService.filterByUpdate(
-                ankiNotes,
-                ankiNotes,
+                ankiNotesWithExisting,
+                ankiNotesWithExisting,
                 [parsedCard],
                 [67890],
                 []
@@ -258,13 +250,8 @@ describe('CardsService', () => {
             // Initialize updateFile to false
             (cardsService as any).updateFile = false;
             
-            // Mock empty Anki notes
-            const ankiNotes: Array<{
-                noteId: number;
-                fields: { [key: string]: { value: string } };
-                modelName: string;
-                tags: string[];
-            }> = [];
+            // Mock empty Anki notes (Correct type annotation)
+            const ankiNotes: AnkiNoteInfo[] = [];
             
             // Mock file content
             (cardsService as any).file = fileContent;
@@ -302,6 +289,90 @@ describe('CardsService', () => {
             // Card should be in the cardsToCreate array
             expect(result[0].length).toBe(1);
             expect(result[0][0]).toBe(parsedCard);
+        });
+    });
+
+    describe('getCardsIds', () => {
+        it('should return an array of card IDs for inserted cards present in Anki', () => {
+            // Mock AnkiNoteInfo data (including the 'cards' property)
+            const mockAnkiNotes: AnkiNoteInfo[] = [
+                {
+                    noteId: 111,
+                    tags: [],
+                    modelName: 'Basic',
+                    fields: {
+                        Front: { value: 'Q1', order: 0 },
+                        Back: { value: 'A1', order: 1 }
+                    },
+                    cards: [11101, 11102] // Card IDs associated with this note
+                },
+                {
+                    noteId: 222,
+                    tags: [],
+                    modelName: 'Basic',
+                    fields: {
+                        Front: { value: 'Q2', order: 0 },
+                        Back: { value: 'A2', order: 1 }
+                    },
+                    cards: [22201]
+                },
+                {
+                    noteId: 333, // This note corresponds to a card not marked as inserted
+                    tags: [],
+                    modelName: 'Basic',
+                    fields: {
+                        Front: { value: 'Q3', order: 0 },
+                        Back: { value: 'A3', order: 1 }
+                    },
+                    cards: [33301]
+                }
+            ];
+
+            // Mock generated Card data
+            const mockGeneratedCards: Card[] = [
+                new Flashcard(111, 'Deck', 'Q1?A1', {Front:'', Back:''}, false, 0, 0, [], true, [], false), // Inserted, matches noteId 111
+                new Flashcard(222, 'Deck', 'Q2?A2', {Front:'', Back:''}, false, 0, 0, [], true, [], false), // Inserted, matches noteId 222
+                new Flashcard(333, 'Deck', 'Q3?A3', {Front:'', Back:''}, false, 0, 0, [], false, [], false), // NOT inserted
+                new Flashcard(444, 'Deck', 'Q4?A4', {Front:'', Back:''}, false, 0, 0, [], true, [], false), // Inserted, but no matching noteId in mockAnkiNotes
+            ];
+
+            // Call the method under test
+            const resultIds = cardsService.getCardsIds(mockAnkiNotes, mockGeneratedCards);
+
+            // Assert: Should contain card IDs from notes 111 and 222
+            expect(resultIds).toEqual(expect.arrayContaining([11101, 11102, 22201]));
+            // Assert: Should have the correct length (only cards from inserted notes)
+            expect(resultIds).toHaveLength(3);
+            // Assert: Should NOT contain card IDs from note 333 (not inserted)
+            expect(resultIds).not.toEqual(expect.arrayContaining([33301]));
+        });
+
+        it('should return an empty array if ankiCards is null or undefined', () => {
+            const mockGeneratedCards: Card[] = [
+                new Flashcard(111, 'Deck', 'Q1?A1', {Front:'', Back:''}, false, 0, 0, [], true, [], false),
+            ];
+            const resultIdsNull = cardsService.getCardsIds(null, mockGeneratedCards);
+            const resultIdsUndefined = cardsService.getCardsIds(undefined, mockGeneratedCards);
+
+            expect(resultIdsNull).toEqual([]);
+            expect(resultIdsUndefined).toEqual([]);
+        });
+
+        it('should return an empty array if generatedCards is empty', () => {
+             const mockAnkiNotes: AnkiNoteInfo[] = [
+                {
+                    noteId: 111,
+                    tags: [],
+                    modelName: 'Basic',
+                    fields: {
+                        Front: { value: 'Q1', order: 0 },
+                        Back: { value: 'A1', order: 1 }
+                    },
+                    cards: [11101, 11102] 
+                }
+            ];
+            const resultIds = cardsService.getCardsIds(mockAnkiNotes, []);
+            expect(resultIds).toEqual([]);
         });
     });
 }); 

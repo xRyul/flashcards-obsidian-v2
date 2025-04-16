@@ -41,7 +41,7 @@ describe('Notification System and YAML Frontmatter', () => {
         ankiService.getNotesInDeck = jest.fn().mockResolvedValue([]);
         ankiService.getCards = jest.fn().mockResolvedValue([]);
         ankiService.cardsInfo = jest.fn().mockResolvedValue([]);
-        ankiService.deleteCards = jest.fn().mockResolvedValue({});
+        ankiService.deleteCards = jest.fn().mockResolvedValue(undefined);
         
         mockApp = {
             vault: {
@@ -49,24 +49,24 @@ describe('Notification System and YAML Frontmatter', () => {
                 modify: jest.fn().mockResolvedValue(undefined),
                 getName: jest.fn().mockReturnValue('Test Vault'),
                 adapter: {
-                    instanceof: jest.fn().mockReturnValue(true)
-                }
+                    // instanceof: jest.fn().mockReturnValue(true) // Removed problematic line
+                } as any // Cast adapter to any to allow partial mock
             },
             metadataCache: {
                 getFileCache: jest.fn().mockReturnValue({ frontmatter: {} }),
                 getFirstLinkpathDest: jest.fn()
-            },
+            } as any, // Cast metadataCache to any
             fileManager: {
                 processFrontMatter: jest.fn().mockImplementation((file, callback) => {
                     const frontmatter = {};
                     callback(frontmatter);
                     return true;
                 })
-            }
+            } as any // Cast fileManager to any
         };
         
         // Mock Regex
-        mockRegex = new Regex({} as any) as jest.Mocked<Regex>;
+        mockRegex = new Regex(mockSettings) as jest.Mocked<Regex>; // Pass mockSettings instead of partial object
         mockRegex.update = jest.fn();
         
         // Setup mock settings
@@ -88,7 +88,7 @@ describe('Notification System and YAML Frontmatter', () => {
             overrideAnkiTags: false,
             mediaFolder: 'media',
             folder: "",
-        } as unknown as ISettings;
+        } as ISettings;
         
         // Mock file
         mockFile = {
@@ -106,7 +106,7 @@ describe('Notification System and YAML Frontmatter', () => {
                 name: 'test',
                 isRoot: () => false
             }
-        } as unknown as TFile;
+        } as TFile;
         
         // Initialize parser and service with minimal mocks
         parserService = {
@@ -135,14 +135,14 @@ describe('Notification System and YAML Frontmatter', () => {
     describe('YAML Frontmatter Detection', () => {
         it('should use deck name from frontmatter when available', async () => {
             // Setup frontmatter with cards-deck key
-            mockApp.metadataCache.getFileCache.mockReturnValue({
+            (mockApp.metadataCache.getFileCache as jest.Mock).mockReturnValue({
                 frontmatter: {
                     'cards-deck': 'Custom Deck'
                 }
             });
             
             // Mock file content
-            mockApp.vault.read.mockResolvedValue('---\ncards-deck: Custom Deck\n---\nSome content');
+            (mockApp.vault.read as jest.Mock).mockResolvedValue('---\ncards-deck: Custom Deck\n---\nSome content');
             
             // Execute the service
             await cardsService.execute(mockFile);
@@ -159,14 +159,14 @@ describe('Notification System and YAML Frontmatter', () => {
         
         it('should show notification when frontmatter exists but cards-deck key is missing', async () => {
             // Setup frontmatter without cards-deck key
-            mockApp.metadataCache.getFileCache.mockReturnValue({
+            (mockApp.metadataCache.getFileCache as jest.Mock).mockReturnValue({
                 frontmatter: {
                     'tags': ['note', 'test']
                 }
             });
             
             // Mock file content
-            mockApp.vault.read.mockResolvedValue('---\ntags: [note, test]\n---\nSome content');
+            (mockApp.vault.read as jest.Mock).mockResolvedValue('---\ntags: [note, test]\n---\nSome content');
             
             // Execute the service
             await cardsService.execute(mockFile);
@@ -186,12 +186,12 @@ describe('Notification System and YAML Frontmatter', () => {
             mockSettings.folderBasedDeck = true;
             
             // Setup frontmatter without cards-deck key
-            mockApp.metadataCache.getFileCache.mockReturnValue({
+            (mockApp.metadataCache.getFileCache as jest.Mock).mockReturnValue({
                 frontmatter: {}
             });
             
             // Mock file content
-            mockApp.vault.read.mockResolvedValue('Some content without frontmatter');
+            (mockApp.vault.read as jest.Mock).mockResolvedValue('Some content without frontmatter');
             
             // Execute the service
             await cardsService.execute(mockFile);
@@ -211,12 +211,12 @@ describe('Notification System and YAML Frontmatter', () => {
             mockSettings.folderBasedDeck = false;
             
             // Setup no frontmatter
-            mockApp.metadataCache.getFileCache.mockReturnValue({
+            (mockApp.metadataCache.getFileCache as jest.Mock).mockReturnValue({
                 frontmatter: null
             });
             
             // Mock file content
-            mockApp.vault.read.mockResolvedValue('Some content without frontmatter');
+            (mockApp.vault.read as jest.Mock).mockResolvedValue('Some content without frontmatter');
             
             // Execute the service
             await cardsService.execute(mockFile);
@@ -285,7 +285,7 @@ describe('Notification System and YAML Frontmatter', () => {
         it('should show notification for deleted cards', async () => {
             // Directly test the deleteCardsFromAnkiOnly method
             // Mock the required dependencies
-            ankiService.deleteCards.mockResolvedValueOnce({});
+            ankiService.deleteCards.mockResolvedValueOnce(undefined);
             
             // Call the method directly instead of through a spy
             await cardsService.deleteCardsFromAnkiOnly([123, 456]);
