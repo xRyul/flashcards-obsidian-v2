@@ -1,0 +1,10 @@
+[33m212e613[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge branch 'main' of github.com:xRyul/flashcards-v2
+[33m5db5b1c[m ci: Update release workflow for name and assets
+[33m066fb54[m chore(release): 2.0.2
+[33m64f9c6e[m chore: Sync manifest.json to package.json version 2.0.1
+[33m096487e[m fix: Add package-lock, update release workflow
+[33ma7efdd3[m ci: Add GitHub Actions workflow for automated releases
+[33mc1b7aaa[m ref: Typecasting of any
+[33md72248f[m ref: Use TFile and TFolder in tests
+[33m27b8abd[m refactor: improve DOM security in parser.ts by removing innerHTML/outerHTML
+[33mb4d53fd[m Update Manifest
