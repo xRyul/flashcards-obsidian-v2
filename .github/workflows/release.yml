@@ -58,6 +58,9 @@ jobs:
           # Fetch the new tag name
           NEW_TAG=$(git describe --tags --abbrev=0)
           echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+          # Create release version by removing 'v' prefix
+          RELEASE_VERSION=${NEW_TAG#v}
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
 
       - name: Generate Release Notes
         id: generate_notes
@@ -89,7 +92,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ env.NEW_TAG }}
-          release_name: ${{ env.NEW_TAG }}
+          release_name: ${{ env.RELEASE_VERSION }} # Use the version without 'v'
           body_path: ${{ runner.temp }}/RELEASE_NOTES.md
           draft: false
-          prerelease: false 
+          prerelease: false
+          files: |
+            main.js
+            manifest.json
+            # Add styles.css here if needed
