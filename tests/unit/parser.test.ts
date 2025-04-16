@@ -463,11 +463,11 @@ Even more content
         const mockEmbeds = [
             { 
                 getAttribute: jest.fn().mockReturnValue('embed1.md'),
-                outerHTML: '<div class="internal-embed" src="embed1.md">Embed 1 content</div>' 
+                innerHTML: 'Embed 1 content'
             },
             { 
                 getAttribute: jest.fn().mockReturnValue('embed2.md'),
-                outerHTML: '<div class="internal-embed" src="embed2.md">Embed 2 content</div>' 
+                innerHTML: 'Embed 2 content'
             }
         ];
         
@@ -1123,7 +1123,7 @@ Here are some embeds:
             // Return a list with a problematic embed
             return [{
                 getAttribute: jest.fn().mockReturnValue('some/path.md'),
-                outerHTML: '<div class="internal-embed" src="some/path.md">Content</div>'
+                innerHTML: 'Content'
             }]
         });
         
@@ -1342,7 +1342,7 @@ More content
             // Return a list with a problematic embed
             return [{
                 getAttribute: jest.fn().mockReturnValue('some/path.md'),
-                outerHTML: '<div class="internal-embed" src="some/path.md">Content</div>'
+                innerHTML: 'Content'
             }]
         });
         

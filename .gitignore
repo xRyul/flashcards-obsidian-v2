@@ -35,3 +35,6 @@ docs/test-vault/.obsidian/workspace
 # Memory Bank
 memory-bank/
 coverage/
+
+# Cursor
+.cursor/
