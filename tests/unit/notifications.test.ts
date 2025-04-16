@@ -93,9 +93,18 @@ describe('Notification System and YAML Frontmatter', () => {
         // Mock file
         mockFile = {
             path: 'test/path.md',
+            name: 'path.md',
             basename: 'path',
+            extension: 'md',
+            stat: {
+                ctime: 0,
+                mtime: 0,
+                size: 0
+            },
             parent: {
-                path: 'test'
+                path: 'test',
+                name: 'test',
+                isRoot: () => false
             }
         } as unknown as TFile;
         

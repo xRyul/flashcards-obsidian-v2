@@ -1,0 +1,400 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+
+# Obsidian Plugin Development Rules
+
+## Core Concepts
+
+### Plugin Structure
+- All plugins extend the `Plugin` class from "obsidian"
+- Must implement `onload()` and `onunload()` methods
+- Follows Obsidian's plugin lifecycle management
+
+```typescript
+class MyPlugin extends Plugin {
+  async onload() {
+    // Initialize plugin
+    this.registerCommands();
+    this.registerViews();
+    this.registerEventListeners();
+  }
+
+  async onunload() {
+    // Clean up resources
+    this.unregisterAll();
+  }
+}
+```
+
+### Key Components
+- **Vault**: Collection of notes in Obsidian (`this.app.vault`)
+- **Workspace**: UI layout management (`this.app.workspace`)
+- **Views**: Content display components (extend `ItemView`)
+- **Commands**: User actions via Command Palette or hotkeys
+
+## Type Safety
+
+### Runtime Type Verification
+```typescript
+// Use instanceof for proper type checking
+const file = this.app.workspace.getActiveFile();
+if (file instanceof TFile) {
+  // Handle file
+}
+
+// Avoid type assertions without validation
+// BAD
+const file = this.app.workspace.getActiveFile() as TFile;
+
+// GOOD
+const file = this.app.workspace.getActiveFile();
+if (file instanceof TFile) {
+  // Use file
+}
+```
+
+### Interface Definitions
+```typescript
+// Define complete interfaces with all required properties
+interface IFile {
+  path: string;
+  name: string;
+  basename: string;
+  extension: string;
+  stat: {
+    ctime: number;
+    mtime: number;
+    size: number;
+  };
+  parent: {
+    path: string;
+    name: string;
+    isRoot: () => boolean;
+  };
+}
+
+// Use interfaces for type safety
+function processFile(file: IFile): void {
+  // Type-safe file processing
+}
+```
+
+### Mock Objects
+```typescript
+// Create complete mock objects with all required properties
+const mockFile = {
+  path: 'test.md',
+  name: 'test.md',
+  basename: 'test',
+  extension: 'md',
+  stat: {
+    ctime: 0,
+    mtime: 0,
+    size: 0
+  },
+  parent: {
+    path: '/',
+    name: '/',
+    isRoot: () => true
+  }
+} as TFile;
+
+// Mock with proper typing
+interface MockTFile extends TFile {
+  mockProperty?: string;
+}
+```
+
+## Testing Patterns
+
+### Mock Object Standards
+- Fully implement required interfaces
+- Include all necessary properties and methods
+- Provide realistic data structures
+- Ensure proper cleanup after tests
+
+```typescript
+// Complete mock implementation
+const mockApp = {
+  vault: {
+    getMarkdownFiles: jest.fn(),
+    getFiles: jest.fn(),
+    read: jest.fn(),
+    write: jest.fn()
+  },
+  workspace: {
+    getActiveFile: jest.fn(),
+    getActiveViewOfType: jest.fn()
+  }
+} as unknown as App;
+```
+
+### DOM Environment Testing
+```typescript
+// Mock DOM environment for tests
+global.document = {
+  createElement: jest.fn(),
+  createTextNode: jest.fn(),
+  querySelector: jest.fn(),
+  querySelectorAll: jest.fn()
+} as unknown as Document;
+
+// Mock XMLSerializer
+global.XMLSerializer = class {
+  serializeToString(element: Element): string {
+    return '<mock>serialized</mock>';
+  }
+} as unknown as typeof XMLSerializer;
+```
+
+### Test Cleanup
+```typescript
+afterEach(() => {
+  // Restore original functions
+  jest.restoreAllMocks();
+  
+  // Clean up DOM mocks
+  delete global.document;
+  delete global.XMLSerializer;
+  
+  // Reset any global state
+  globalState.reset();
+});
+```
+
+## Security Best Practices
+
+### DOM Manipulation Security
+```typescript
+// BAD - Unsafe DOM manipulation
+element.innerHTML = userContent;
+element.outerHTML = userContent;
+
+// GOOD - Safe DOM manipulation
+const textNode = document.createTextNode(userContent);
+element.appendChild(textNode);
+
+// GOOD - Using Obsidian's safe helpers
+element.createEl('div', { text: userContent });
+
+// GOOD - Using proper DOM APIs
+const newElement = document.createElement('div');
+newElement.textContent = userContent;
+element.appendChild(newElement);
+```
+
+### HTML Serialization
+```typescript
+// Use XMLSerializer for safe HTML serialization
+const serializer = new XMLSerializer();
+const html = serializer.serializeToString(element);
+
+// Handle serialization errors
+try {
+  const html = serializer.serializeToString(element);
+} catch (error) {
+  console.error('Serialization failed:', error);
+  // Implement fallback
+}
+```
+
+### Environment Checks
+```typescript
+// Check environment before using DOM APIs
+if (typeof document !== 'undefined') {
+  // Browser environment - use DOM APIs
+  const element = document.createElement('div');
+} else {
+  // Test environment - use fallbacks
+  const element = { textContent: '' };
+}
+
+// Check for required APIs
+if (typeof XMLSerializer !== 'undefined') {
+  // Use XMLSerializer
+} else {
+  // Use fallback serialization
+}
+```
+
+### Error Handling
+```typescript
+try {
+  // DOM operations
+  const element = document.createElement('div');
+  element.textContent = userContent;
+} catch (error) {
+  console.error('DOM manipulation failed:', error);
+  // Implement fallback behavior
+  notifyUser('Operation failed, using fallback');
+}
+```
+
+## Event Handling
+
+### Registering Events
+```typescript
+// Register workspace events
+this.registerEvent(
+  this.app.workspace.on('file-open', (file) => {
+    if (file instanceof TFile) {
+      // Handle file
+    }
+  })
+);
+
+// Register vault events
+this.registerEvent(
+  this.app.vault.on('modify', (file) => {
+    // Handle file modification
+  })
+);
+
+// Register DOM events
+this.registerDomEvent(button, 'click', (event) => {
+  // Handle click
+});
+```
+
+### Event Cleanup
+```typescript
+// Automatic cleanup with registerEvent
+this.registerEvent(eventHandler);
+
+// Manual cleanup if needed
+const handler = this.app.workspace.on('file-open', callback);
+this.register(() => {
+  handler.unregister();
+});
+```
+
+## UI Components
+
+### Creating Elements
+```typescript
+// Basic element creation
+const div = contentEl.createEl('div');
+
+// With text content
+const header = contentEl.createEl('h1', { text: 'My Plugin' });
+
+// With CSS classes
+const container = contentEl.createEl('div', { cls: 'my-container' });
+
+// With multiple classes
+const item = contentEl.createEl('div', { cls: ['item', 'highlighted'] });
+
+// With attributes
+const link = contentEl.createEl('a', { 
+  href: 'https://obsidian.md',
+  target: '_blank',
+  text: 'Obsidian Website'
+});
+```
+
+### Settings UI
+```typescript
+class SettingsTab extends PluginSettingTab {
+  display(): void {
+    const {containerEl} = this;
+    containerEl.empty();
+
+    // Text setting
+    new Setting(containerEl)
+      .setName("Setting name")
+      .setDesc("Description")
+      .addText(text => text
+        .setPlaceholder("Default value")
+        .setValue(this.plugin.settings.value)
+        .onChange(async (value) => {
+          this.plugin.settings.value = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Toggle setting
+    new Setting(containerEl)
+      .setName("Enable feature")
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enabled)
+        .onChange(async (value) => {
+          this.plugin.settings.enabled = value;
+          await this.plugin.saveSettings();
+        }));
+  }
+}
+```
+
+## Performance Considerations
+
+### Resource Management
+```typescript
+// Clean up resources in onunload
+async onunload() {
+  // Unregister all events
+  this.unregisterAll();
+  
+  // Clean up DOM elements
+  this.contentEl?.empty();
+  
+  // Release other resources
+  this.releaseResources();
+}
+
+// Use debouncing for frequent events
+const processChange = debounce((file) => {
+  // Process changes
+}, 300, true);
+```
+
+### Memory Management
+```typescript
+// Avoid memory leaks
+class MyView extends ItemView {
+  private subscriptions: (() => void)[] = [];
+
+  onOpen() {
+    // Store subscriptions for cleanup
+    this.subscriptions.push(
+      this.app.workspace.on('file-open', this.handleFileOpen)
+    );
+  }
+
+  onClose() {
+    // Clean up subscriptions
+    this.subscriptions.forEach(unsubscribe => unsubscribe());
+    this.subscriptions = [];
+  }
+}
+```
+
+## Best Practices Summary
+
+1. **Type Safety**
+   - Use `instanceof` for runtime type checking
+   - Define complete interfaces
+   - Create comprehensive mock objects
+
+2. **Testing**
+   - Mock all dependencies
+   - Clean up after tests
+   - Test edge cases and error conditions
+
+3. **Security**
+   - Avoid unsafe DOM manipulation
+   - Use proper serialization
+   - Implement environment checks
+   - Handle errors gracefully
+
+4. **Performance**
+   - Clean up resources properly
+   - Use debouncing for frequent events
+   - Avoid memory leaks
+
+5. **UI Development**
+   - Use Obsidian's built-in components
+   - Follow consistent styling
+   - Implement proper error handling
+   - Consider accessibility 

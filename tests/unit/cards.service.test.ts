@@ -88,7 +88,22 @@ describe('CardsService', () => {
     describe('Content-Based ID Recovery', () => {
         it('should recover IDs for cards with matching content in Anki', async () => {
             // Setup: File with a card that has no ID but matches content in Anki
-            const file = { path: 'test.md' } as TFile;
+            const file = {
+                path: 'test.md',
+                name: 'test.md',
+                basename: 'test',
+                extension: 'md',
+                stat: {
+                    ctime: 0,
+                    mtime: 0,
+                    size: 0
+                },
+                parent: {
+                    path: '',
+                    name: '',
+                    isRoot: () => true
+                }
+            } as TFile;
             const fileContent = '# Test\n\nQuestion without ID\n?\nAnswer text';
             
             // Mock existing cards in Anki with specific content
@@ -155,7 +170,22 @@ describe('CardsService', () => {
         
         it('should not modify cards that already have IDs', async () => {
             // Setup: File with a card that already has an ID
-            const file = { path: 'test.md' } as TFile;
+            const file = {
+                path: 'test.md',
+                name: 'test.md',
+                basename: 'test',
+                extension: 'md',
+                stat: {
+                    ctime: 0,
+                    mtime: 0,
+                    size: 0
+                },
+                parent: {
+                    path: '',
+                    name: '',
+                    isRoot: () => true
+                }
+            } as TFile;
             const fileContent = '# Test\n\nQuestion with ID <!-- ankiID: 67890 -->\n?\nAnswer text';
             
             // Initialize updateFile to false

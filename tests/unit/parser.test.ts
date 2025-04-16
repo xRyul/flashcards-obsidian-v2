@@ -448,28 +448,51 @@ Even more content
 
     // NEW TEST - Test getEmbedMap with mocked document elements
     it('should extract embed content from DOM elements', () => {
-        // Mock htmlToMarkdown function before setting up other mocks
-        const mockHtmlMarkdownFn = jest.fn((html) => {
-            return html.includes('embed1.md') 
-                ? '(mock-markdown-for: <div class="internal-embed" src="embed1.md">Embed 1 content</div>)'
-                : '(mock-markdown-for: <div class="internal-embed" src="embed2.md">Embed 2 content</div>)';
-        });
-        
-        // Save original and set mock
+        // Save original functions to restore later
         const originalHtmlToMarkdown = (global as any).htmlToMarkdown;
+        
+        // Mock the htmlToMarkdown function
+        const mockHtmlMarkdownFn = jest.fn().mockImplementation((html) => {
+            return `(mock-markdown-for:${html})`;
+        });
         (global as any).htmlToMarkdown = mockHtmlMarkdownFn;
         
-        // Setup mock document elements
+        // Setup mock document elements and child nodes
+        const mockChildNode1 = { textContent: 'Embed 1 content' };
+        const mockChildNode2 = { textContent: 'Embed 2 content' };
+        
         const mockEmbeds = [
             { 
                 getAttribute: jest.fn().mockReturnValue('embed1.md'),
-                innerHTML: 'Embed 1 content'
+                hasChildNodes: jest.fn().mockReturnValue(true),
+                childNodes: [mockChildNode1]
             },
             { 
                 getAttribute: jest.fn().mockReturnValue('embed2.md'),
-                innerHTML: 'Embed 2 content'
+                hasChildNodes: jest.fn().mockReturnValue(true),
+                childNodes: [mockChildNode2]
             }
         ];
+
+        // Mock the serializer
+        class MockXMLSerializer {
+            serializeToString(node: any) {
+                return node.textContent;
+            }
+        }
+        global.XMLSerializer = MockXMLSerializer as any;
+        
+        // Mock process.env.NODE_ENV to not be 'test' for this specific test
+        const originalNodeEnv = process.env.NODE_ENV;
+        process.env.NODE_ENV = 'not-test';
+        
+        // Mock Array.from to properly handle childNodes
+        const originalArrayFrom = Array.from;
+        global.Array.from = function(collection: any) {
+            if (collection === mockEmbeds[0].childNodes) return [mockChildNode1];
+            if (collection === mockEmbeds[1].childNodes) return [mockChildNode2];
+            return originalArrayFrom(collection);
+        };
         
         // Mock the global document.documentElement.getElementsByClassName
         // @ts-ignore - Intentionally overriding the mock
@@ -483,12 +506,15 @@ Even more content
         expect(embedMap.has('embed1.md')).toBe(true);
         expect(embedMap.has('embed2.md')).toBe(true);
         expect(embedMap.get('embed1.md')).toContain('(mock-markdown-for:');
-        expect(embedMap.get('embed1.md')).toContain('embed1.md');
+        expect(embedMap.get('embed1.md')).toContain('Embed 1 content');
         expect(embedMap.get('embed2.md')).toContain('(mock-markdown-for:');
-        expect(embedMap.get('embed2.md')).toContain('embed2.md');
+        expect(embedMap.get('embed2.md')).toContain('Embed 2 content');
         
-        // Restore the original function
+        // Restore the original functions
         (global as any).htmlToMarkdown = originalHtmlToMarkdown;
+        process.env.NODE_ENV = originalNodeEnv;
+        global.Array.from = originalArrayFrom;
+        delete global.XMLSerializer;
     });
 
     // NEW TEST - Test handling of edge cases in complex syntax parsing

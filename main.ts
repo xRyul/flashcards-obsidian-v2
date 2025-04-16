@@ -24,7 +24,7 @@ export default class ObsidianFlashcard extends Plugin {
 			name: 'Generate for the current file',
 			checkCallback: (checking: boolean) => {
 				const activeFile = this.app.workspace.getActiveFile()
-				if (activeFile) {
+				if (activeFile instanceof TFile) {
 					if (!checking) {
 						this.generateCards(activeFile)
 					}

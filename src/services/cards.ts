@@ -261,9 +261,12 @@ export class CardsService {
 
   private updateFrontmatter(frontmatter: FrontMatterCache, deckName: string) {
     const activeFile = this.app.workspace.getActiveFile();
+    if (!(activeFile instanceof TFile)) {
+        return;
+    }
 
     this.app.fileManager.processFrontMatter(activeFile, (frontmatter) => {
-      frontmatter["cards-deck"] = deckName;
+        frontmatter["cards-deck"] = deckName;
     });
   }
 
