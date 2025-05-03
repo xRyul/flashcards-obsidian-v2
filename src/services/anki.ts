@@ -9,7 +9,7 @@ import {
   codeDeckExtension,
   sourceDeckExtension,
 } from "src/conf/constants";
-import { AnkiNoteInfo, AnkiUpdateAction, CreateModelAction, StoreMediaAction, AnkiStoreMediaResult } from "src/types/anki";
+import { AnkiNoteInfo, AnkiUpdateAction, CreateModelAction, StoreMediaAction, AnkiStoreMediaResult, CreateModelParams } from "src/types/anki";
 import { arraysEqual } from "src/utils";
 import {
   AnkiNote,
@@ -31,17 +31,27 @@ export class Anki {
 
     const actions: CreateModelAction[] = models.map(modelParams => ({
       action: "createModel",
-      params: modelParams as any
+      params: modelParams as unknown as CreateModelParams
     }));
 
     try {
       const results = await this.invoke("multi", 6, { actions: actions });
       if (results && typeof results === 'object' && !Array.isArray(results) && results.error) {
+        // Ignore "Model name already exists" as this is normal when plugin has run before
+        if (results.error === "Model name already exists") {
+          console.log("Model already exists, continuing...");
+          return;
+        }
         throw results.error;
       }
       if (Array.isArray(results)) {
         for (const result of results) {
           if (result !== null) {
+            // Ignore "Model name already exists" errors for individual models
+            if (typeof result === 'object' && result.error === "Model name already exists") {
+              console.log("Model already exists, continuing...");
+              continue;
+            }
             throw result;
           }
         }
@@ -50,6 +60,11 @@ export class Anki {
         throw new Error("Unexpected response structure from Anki multi action");
       }
     } catch (error) {
+      // Allow model name exists errors to pass through
+      if (typeof error === 'string' && error.includes("Model name already exists")) {
+        console.log("Model already exists, continuing...");
+        return;
+      }
       console.error("Error creating Anki models:", error);
       throw error;
     }
@@ -404,73 +419,64 @@ export class Anki {
     }
 
     const obsidianBasic = {
-      action: "createModel",
-      params: {
-        modelName: `Obsidian-basic${sourceExtension}${codeExtension}`,
-        inOrderFields: classicFields,
-        css: css,
-        cardTemplates: [
-          {
-            Name: "Front / Back",
-            Front: front,
-            Back: back,
-          },
-        ],
-      },
+      modelName: `Obsidian-basic${sourceExtension}${codeExtension}`,
+      inOrderFields: classicFields,
+      css: css,
+      isCloze: false,
+      cardTemplates: [
+        {
+          Name: "Front / Back",
+          Front: front,
+          Back: back,
+        },
+      ],
     };
 
     const obsidianBasicReversed = {
-      action: "createModel",
-      params: {
-        modelName: `Obsidian-basic-reversed${sourceExtension}${codeExtension}`,
-        inOrderFields: classicFields,
-        css: css,
-        cardTemplates: [
-          {
-            Name: "Front / Back",
-            Front: front,
-            Back: back,
-          },
-          {
-            Name: "Back / Front",
-            Front: frontReversed,
-            Back: backReversed,
-          },
-        ],
-      },
+      modelName: `Obsidian-basic-reversed${sourceExtension}${codeExtension}`,
+      inOrderFields: classicFields,
+      css: css,
+      isCloze: false,
+      cardTemplates: [
+        {
+          Name: "Front / Back",
+          Front: front,
+          Back: back,
+        },
+        {
+          Name: "Back / Front",
+          Front: frontReversed,
+          Back: backReversed,
+        },
+      ],
     };
 
     const obsidianCloze = {
-      action: "createModel",
-      params: {
-        modelName: `Obsidian-cloze${sourceExtension}${codeExtension}`,
-        inOrderFields: clozeFields,
-        css: css,
-        isCloze: true,
-        cardTemplates: [
-          {
-            Name: "Cloze",
-            Front: clozeFront,
-            Back: clozeBack,
-          },
-        ],
-      },
+      modelName: `Obsidian-cloze${sourceExtension}${codeExtension}`,
+      inOrderFields: clozeFields,
+      css: css,
+      isCloze: true,
+      cardTemplates: [
+        {
+          Name: "Cloze",
+          Front: clozeFront,
+          Back: clozeBack,
+        },
+      ],
     };
 
     const obsidianSpaced = {
-      action: "createModel",
-      params: {
-        modelName: `Obsidian-spaced${sourceExtension}${codeExtension}`,
-        inOrderFields: promptFields,
-        css: css,
-        cardTemplates: [
-          {
-            Name: "Spaced",
-            Front: prompt,
-            Back: promptBack,
-          },
-        ],
-      },
+      modelName: `Obsidian-spaced${sourceExtension}${codeExtension}`,
+      inOrderFields: promptFields,
+      css: css,
+      isCloze: false,
+      cardTemplates: [
+        {
+          Name: "Spaced",
+          Front: prompt,
+          Back: promptBack,
+        },
+      ],
     };
 
     return [obsidianBasic, obsidianBasicReversed, obsidianCloze, obsidianSpaced];
