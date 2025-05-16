@@ -5,15 +5,17 @@ import {
   FrontMatterCache,
   Notice,
   TFile,
+  normalizePath,
 } from "obsidian";
 import { Parser } from "src/services/parser";
 import { ISettings } from "src/conf/settings";
 import { Card } from "src/entities/card";
-import { arrayBufferToBase64 } from "src/utils";
 import { Regex } from "src/conf/regex";
 import { noticeTimeout } from "src/conf/constants";
 import { Inlinecard } from "src/entities/inlinecard";
 import { AnkiNoteInfo } from "src/types/anki";
+import { arraysEqual } from "src/utils";
+import { arrayBufferToBase64 } from "obsidian";
 
 export class CardsService {
   private app: App;
@@ -118,12 +120,6 @@ export class CardsService {
       const cardIds: number[] = this.getCardsIds(ankiNotesForIDsInFile, cards);
       const cardsToDelete: number[] = this.parser.getCardsToDelete(this.file);
 
-      console.info("Flashcards: Cards to create");
-      console.info(cardsToCreate);
-      console.info("Flashcards: Cards to update");
-      console.info(cardsToUpdate);
-      console.info("Flashcards: Cards to delete");
-      console.info(cardsToDelete);
       if (cardsNotInAnki) {
         console.info("Flashcards: Cards not in Anki (maybe deleted)");
         for (const card of cardsNotInAnki) {
@@ -132,7 +128,7 @@ export class CardsService {
           );
         }
       }
-      console.info(cardsNotInAnki);
+      // console.info(cardsNotInAnki);
 
       this.insertMedias(cards, sourcePath);
       await this.deleteCardsOnAnki(cardsToDelete, ankiBlocks);
@@ -155,7 +151,7 @@ export class CardsService {
 
       // --- Final Cleanup: Remove obsolete ID blocks ---
       if (this.idsToRemoveFromFile.size > 0) {
-        console.log("Removing obsolete Anki ID blocks from file content:", Array.from(this.idsToRemoveFromFile));
+        // console.log("Removing obsolete Anki ID blocks from file content:", Array.from(this.idsToRemoveFromFile));
         const lines = this.file.split('\n');
         const cleanedLines = lines.filter(line => {
             const idMatch = line.trim().match(/^<!-- ankiID: (\d+) -->$/);
@@ -593,8 +589,8 @@ export class CardsService {
 
   public async deckNeedToBeChanged(cardsIds: number[], deckName: string) {
     const cardsInfo = await this.anki.cardsInfo(cardsIds);
-    console.log("Flashcards: Cards info");
-    console.log(cardsInfo);
+    // console.log("Flashcards: Cards info");
+    // console.log(cardsInfo);
     if (cardsInfo.length !== 0) {
       return cardsInfo[0].deckName !== deckName;
     }

@@ -39,7 +39,7 @@ export class Anki {
       if (results && typeof results === 'object' && !Array.isArray(results) && results.error) {
         // Ignore "Model name already exists" as this is normal when plugin has run before
         if (results.error === "Model name already exists") {
-          console.log("Model already exists, continuing...");
+          // console.log("Model already exists, continuing...");
           return;
         }
         throw results.error;
@@ -49,7 +49,7 @@ export class Anki {
           if (result !== null) {
             // Ignore "Model name already exists" errors for individual models
             if (typeof result === 'object' && result.error === "Model name already exists") {
-              console.log("Model already exists, continuing...");
+              // console.log("Model already exists, continuing...");
               continue;
             }
             throw result;
@@ -62,7 +62,7 @@ export class Anki {
     } catch (error) {
       // Allow model name exists errors to pass through
       if (typeof error === 'string' && error.includes("Model name already exists")) {
-        console.log("Model already exists, continuing...");
+        // console.log("Model already exists, continuing...");
         return;
       }
       console.error("Error creating Anki models:", error);

@@ -1,4 +1,4 @@
-# Obsidian Flashcards to Anki v2
+# Flashcards to Anki v2
 
 This is a fork of the [Obsidian Flashcards to Anki](https://github.com/reuseman/flashcards-obsidian) plugin.
 
@@ -51,7 +51,7 @@ The {c1:mitochondria} is the powerhouse of the cell.
 Capital of Germany :: Berlin
 ```
 
-### Card with Context (Heading Breadcrumbs)
+### Card with Context (Heading Path)
 ```markdown
 # Biology
 ## Cell Biology

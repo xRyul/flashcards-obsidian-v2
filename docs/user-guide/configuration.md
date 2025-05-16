@@ -41,19 +41,19 @@ The tag used to identify flashcards in your notes. When a line contains this tag
 
 **Default value:** `#card`
 
-### Heading Breadcrumbs
+### Show heading path
 
-**Setting:** `Enable heading breadcrumbs`
+**Setting:** `Show heading path`
 
 When enabled, the plugin automatically includes the heading hierarchy above a card as context in the question field.
 
 **Default value:** `Enabled`
 
-### Breadcrumb Separator
+### Heading Path Separator
 
-**Setting:** `Breadcrumb separator`
+**Setting:** `Heading path separator`
 
-The separator used between heading levels when "heading breadcrumbs" is enabled.
+The separator used between heading levels when "Show heading path" is enabled.
 
 **Default value:** ` > ` (space, greater than symbol, space)
 
@@ -131,10 +131,10 @@ The plugin comes with these default settings:
 
 ```javascript
 {
-  contextAwareMode: true,              // Enable heading breadcrumbs
+  contextAwareMode: true,              // Show heading path
   sourceSupport: true,                 // Add source field to cards
   codeHighlightSupport: true,          // Enable code highlighting 
-  contextSeparator: " > ",             // Separator for heading breadcrumbs
+  contextSeparator: " > ",             // Separator for heading path
   deck: "Default",                     // Default deck name
   folderBasedDeck: true,               // Use folder path as deck name
   folder: "",                          // Reserved for future use

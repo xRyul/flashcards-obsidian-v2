@@ -10,94 +10,6 @@ export class SettingsTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    const description = createFragment()
-    description.append(
-      "This needs to be done only one time. Open Anki and click the button to grant permission.",
-          createEl('br'),
-        'Be aware that AnkiConnect must be installed.',
-    )
-
-    new Setting(containerEl)
-      .setName("Give Permission")
-      .setDesc(description)
-      .addButton((button) => {
-        button.setButtonText("Grant Permission").onClick(() => {
-
-          new Anki().requestPermission().then((result) => {
-            if (result.permission === "granted") {
-              plugin.settings.ankiConnectPermission = true;
-              plugin.saveData(plugin.settings);
-              new Notice("Anki Connect permission granted");
-            } else {
-              new Notice("AnkiConnect permission not granted");
-            }
-          }).catch((error) => {
-            new Notice("Something went wrong, is Anki open?");
-            console.error(error);
-          });
-        });
-      });
-  
-
-    new Setting(containerEl)
-      .setName("Test Anki")
-      .setDesc("Test that connection between Anki and Obsidian actually works.")
-      .addButton((text) => {
-        text.setButtonText("Test").onClick(() => {
-          new Anki()
-            .ping()
-            .then(() => new Notice("Anki works"))
-            .catch(() => new Notice("Anki is not connected"));
-        });
-      });
-  
-    containerEl.createEl("h2", { text: "General" });
-
-    new Setting(containerEl)
-      .setName("Heading breadcrumbs")
-      .setDesc("Add the path of headings above the card to the question (e.g., Chapter > Section > Question).")
-      .addToggle((toggle) =>
-        toggle.setValue(plugin.settings.contextAwareMode).onChange((value) => {
-          plugin.settings.contextAwareMode = value;
-          plugin.saveData(plugin.settings);
-        })
-      );
-
-    new Setting(containerEl)
-      .setName("Source support")
-      .setDesc(
-        "Add to every card the source, i.e. the link to the original card. NOTE: Old cards made without source support cannot be updated."
-      )
-      .addToggle((toggle) =>
-        toggle.setValue(plugin.settings.sourceSupport).onChange((value) => {
-          plugin.settings.sourceSupport = value;
-          plugin.saveData(plugin.settings);
-        })
-      );
-
-    new Setting(containerEl)
-      .setName("Code highlight support")
-      .setDesc("Add highlight of the code in Anki.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(plugin.settings.codeHighlightSupport)
-          .onChange((value) => {
-            plugin.settings.codeHighlightSupport = value;
-            plugin.saveData(plugin.settings);
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Folder-based deck name")
-      .setDesc("Add ID to end of line for inline cards.")
-      .addToggle((toggle) =>
-        toggle.setValue(plugin.settings.folderBasedDeck).onChange((value) => {
-          plugin.settings.folderBasedDeck = value;
-          plugin.saveData(plugin.settings);
-        })
-      );
-
-
     new Setting(containerEl)
       .setName("Default deck name")
       .setDesc(
@@ -117,26 +29,10 @@ export class SettingsTab extends PluginSettingTab {
           });
       });
 
-      new Setting(containerEl)
-        .setName("Default Anki tag")
-        .setDesc("This tag will be added to each generated card on Anki")
-        .addText((text) => {
-          text
-            .setValue(plugin.settings.defaultAnkiTag)
-            .setPlaceholder("Anki tag")
-            .onChange((value) => {
-              if (!value) new Notice("No default tags will be added");
-              plugin.settings.defaultAnkiTag = value.toLowerCase();
-              plugin.saveData(plugin.settings);
-            });
-        });
-
-    containerEl.createEl("h2", { text: "Cards Identification" });
-
     new Setting(containerEl)
       .setName("Flashcards #tag")
       .setDesc(
-        "The tag to identify the flashcards in the notes (case-insensitive)."
+        "The tag to identify the flashcards in the notes (case-insensitive). Default is #card"
       )
       .addText((text) => {
         text
@@ -152,10 +48,10 @@ export class SettingsTab extends PluginSettingTab {
           });
       });
 
-     new Setting(containerEl)
+    new Setting(containerEl)
       .setName("Inline card separator")
       .setDesc(
-        "The separator to identifty the inline cards in the notes."
+        "The separator to identify the inline cards in the notes."
       )
       .addText((text) => {
         text
@@ -179,10 +75,10 @@ export class SettingsTab extends PluginSettingTab {
       });
 
 
-     new Setting(containerEl)
+    new Setting(containerEl)
       .setName("Inline reverse card separator")
       .setDesc(
-        "The separator to identifty the inline revese cards in the notes."
+        "The separator to identify the inline reverse cards in the notes."
       )
       .addText((text) => {
         text
@@ -205,5 +101,108 @@ export class SettingsTab extends PluginSettingTab {
           });
       });
 
+
+    new Setting(containerEl)
+      .setName("Default Anki tag")
+      .setDesc("This tag will be added to each generated card in Anki.")
+      .addText((text) => {
+        text
+          .setValue(plugin.settings.defaultAnkiTag)
+          .setPlaceholder("Anki tag")
+          .onChange((value) => {
+            if (!value) new Notice("No default tags will be added");
+            plugin.settings.defaultAnkiTag = value.toLowerCase();
+            plugin.saveData(plugin.settings);
+          });
+      });
+
+    // General settings (no heading as per guidelines)
+    new Setting(containerEl)
+      .setName("Show heading path")
+      .setDesc("Add the path of headings above the card to the question (e.g., Chapter > Section > Question).")
+      .addToggle((toggle) =>
+        toggle.setValue(plugin.settings.contextAwareMode).onChange((value) => {
+          plugin.settings.contextAwareMode = value;
+          plugin.saveData(plugin.settings);
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Include backlink")
+      .setDesc(
+        "Add backlink to be able to navigate back from the card in Anki to the original card in Obsidian. NOTE: Old cards made without source support cannot be updated."
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(plugin.settings.sourceSupport).onChange((value) => {
+          plugin.settings.sourceSupport = value;
+          plugin.saveData(plugin.settings);
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Code highlighting support")
+      .setDesc("Add highlight of the code in Anki.")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(plugin.settings.codeHighlightSupport)
+          .onChange((value) => {
+            plugin.settings.codeHighlightSupport = value;
+            plugin.saveData(plugin.settings);
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Folder-based deck name")
+      .setDesc("Use current note folder as deck name in Anki.")
+      .addToggle((toggle) =>
+        toggle.setValue(plugin.settings.folderBasedDeck).onChange((value) => {
+          plugin.settings.folderBasedDeck = value;
+          plugin.saveData(plugin.settings);
+        })
+      );
+
+    // Anki connection section
+    new Setting(containerEl).setName('Anki connection').setHeading();
+
+    const description = createFragment()
+    description.append(
+      "This needs to be done only one time. Open Anki and click the button to grant permission.",
+      createEl('br'),
+      'Be aware that AnkiConnect must be installed.',
+    )
+
+    new Setting(containerEl)
+      .setName("Give permission")
+      .setDesc(description)
+      .addButton((button) => {
+        button.setButtonText("Grant permission").onClick(() => {
+
+          new Anki().requestPermission().then((result) => {
+            if (result.permission === "granted") {
+              plugin.settings.ankiConnectPermission = true;
+              plugin.saveData(plugin.settings);
+              new Notice("Anki Connect permission granted");
+            } else {
+              new Notice("AnkiConnect permission not granted");
+            }
+          }).catch((error) => {
+            new Notice("Something went wrong, is Anki open?");
+            console.error(error);
+          });
+        });
+      });
+
+
+    new Setting(containerEl)
+      .setName("Test Anki")
+      .setDesc("Test that connection between Anki and Obsidian actually works.")
+      .addButton((text) => {
+        text.setButtonText("Test").onClick(() => {
+          new Anki()
+            .ping()
+            .then(() => new Notice("Anki works"))
+            .catch(() => new Notice("Anki is not connected"));
+        });
+      });
   }
 }
