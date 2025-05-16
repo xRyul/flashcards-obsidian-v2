@@ -468,10 +468,10 @@ describe('Card Recreation Integration', () => {
     });
 
     /**
-     * Test that cards with heading breadcrumbs (context-aware mode) are handled correctly during recreation
+     * Test that cards with Show heading path are handled correctly during recreation
      */
-    it('should correctly handle recreation of cards with heading breadcrumbs', () => {
-        // Card with heading breadcrumbs and ID in Obsidian but not in Anki
+    it('should correctly handle recreation of cards with Show heading paths', () => {
+        // Card with Show heading paths and ID in Obsidian but not in Anki
         const breadcrumbCard = new Flashcard(
             123456,
             'Default',

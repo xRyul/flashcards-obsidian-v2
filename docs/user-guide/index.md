@@ -96,7 +96,7 @@ If you can't find what you're looking for in this documentation, try:
 
 | Feature | Description |
 |---------|-------------|
-| Heading Breadcrumbs | Adds hierarchical context from headings |
+| Show heading path | Adds hierarchical context from headings |
 | Media Support | Include images and audio in cards |
 | Code Highlighting | Proper syntax highlighting for code blocks |
 | Math Notation | Support for LaTeX math expressions |

@@ -402,16 +402,16 @@ Deeper context test #card
         }
     });
 
-    // NEW TEST - Test math notation conversion
+    // Test math notation conversion
     it('should correctly convert math notation to Anki format', () => {
         const testCases = [
             {
                 input: '$E = mc^2$',
-                expected: '\\\\(E = mc^2\\\\)'
+                expected: '<anki-mathjax>E = mc^2</anki-mathjax>'
             },
             {
                 input: '$$\\frac{1}{2}$$',
-                expected: '\\\\[\\\\frac{1}{2} \\\\]'
+                expected: '<anki-mathjax>\\frac{1}{2}</anki-mathjax>'
             }
         ];
 
@@ -828,24 +828,24 @@ Here are some embeds:
         expect(card1.fields.Front).toContain('Card with inline math');
         
         // Check if inline math is preserved
-        expect(card1.fields.Front).toContain('\\(x^2 + y^2 = z^2\\)');
+        expect(card1.fields.Front).toContain('<anki-mathjax>x^2 + y^2 = z^2</anki-mathjax>');
         
         // Check if block math is preserved
-        expect(card1.fields.Back).toContain('\\[<br');
+        expect(card1.fields.Back).toContain('<anki-mathjax>');
         expect(card1.fields.Back).toContain('\\begin{aligned}');
         expect(card1.fields.Back).toContain('E &amp;= mc^2');
         expect(card1.fields.Back).toContain('F &amp;= ma');
         expect(card1.fields.Back).toContain('\\end{aligned}');
-        expect(card1.fields.Back).toContain('\\]');
+        expect(card1.fields.Back).toContain('</anki-mathjax>');
 
         // Card 2 with multiple inline math
         const card2 = resultCards[1];
         expect(card2).toBeDefined();
         expect(card2.id).toBe(1234567896);
         expect(card2.fields.Front).toContain('Card with multiple inline math elements');
-        expect(card2.fields.Front).toContain('\\(\\alpha\\)');
-        expect(card2.fields.Front).toContain('\\(\\beta\\)');
-        expect(card2.fields.Back).toContain('\\(\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\\)');
+        expect(card2.fields.Front).toContain('<anki-mathjax>\\alpha</anki-mathjax>');
+        expect(card2.fields.Front).toContain('<anki-mathjax>\\beta</anki-mathjax>');
+        expect(card2.fields.Back).toContain('<anki-mathjax>\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}</anki-mathjax>');
     });
 
     // Test for complex image link processing

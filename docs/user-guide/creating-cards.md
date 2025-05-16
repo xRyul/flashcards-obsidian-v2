@@ -222,7 +222,7 @@ These cards don't have a separate answer field - they're designed to prompt you 
 
 ## Adding Context with Headings
 
-When "Heading breadcrumbs" (formerly called "Context-aware mode") is enabled in settings, the plugin automatically adds the headings above a card as context:
+When "Show heading path" is enabled in settings, the plugin automatically adds the headings above a card as context:
 
 ```markdown
 # Biology

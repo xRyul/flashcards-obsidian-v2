@@ -45,7 +45,6 @@ Before installing the plugin, make sure you have:
    - Default deck name
    - Whether to use folder paths as deck names
    - Tag that identifies flashcards in your notes (default: `#card`)
-   - Enable/disable context-aware mode (heading breadcrumbs)
    - Set inline card separators
    - Configure additional options based on your preferences
 3. Open Anki and keep it running in the background

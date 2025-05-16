@@ -103,6 +103,21 @@ This guide helps you diagnose and fix common issues that may occur while using t
 3. Make sure you don't have conflicting Anki add-ons
 4. Re-sync the cards to update the content
 
+> **Note**: The plugin has been updated with improved MathJax rendering support. After updating to the latest version, you'll need to resync your cards to apply the fix. The plugin will attempt to recreate note types with improved rendering support.
+
+### Lists and Callouts Not Displaying Correctly
+
+**Symptoms:**
+- Ordered and unordered lists show up as a single line in Anki
+- Callout blocks lose their formatting when viewed in Anki
+- Line breaks missing between list items
+
+**Solutions:**
+1. Update to the latest version of the plugin, which includes enhanced list formatting
+2. Resync your cards to apply the improved formatting
+3. Ensure your Anki note types have been updated (the plugin will notify you)
+4. For complex formatting, consider using HTML in your Obsidian notes
+
 ## YAML and Deck Issues
 
 ### Missing Deck Key

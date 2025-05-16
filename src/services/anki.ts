@@ -18,55 +18,76 @@ import {
   AnkiPermissionResponse,
   UpdateNoteFieldsAction,
 } from "src/types/anki";
+import { Notice } from "obsidian";
+
+// Define interface for the Anki model
+interface AnkiModel {
+  modelName: string;
+  inOrderFields: string[];
+  css: string;
+  isCloze: boolean;
+  cardTemplates: Array<{
+    Name: string;
+    Front: string;
+    Back: string;
+  }>;
+}
 
 export class Anki {
   public async createModels(
     sourceSupport: boolean,
     codeHighlightSupport: boolean
   ): Promise<void> {
-    let models = this.getModels(sourceSupport, false);
-    if (codeHighlightSupport) {
-      models = models.concat(this.getModels(sourceSupport, true));
+    const models = this.getModels(sourceSupport, codeHighlightSupport);
+
+    // Keep track if any models have been created/updated
+    let modelsUpdated = false;
+
+    for (const model of models) {
+      try {
+        await this.invoke("createModel", 6, model);
+        modelsUpdated = true;
+        console.log(`Created model ${model.modelName}`);
+      } catch (e) {
+        // Model already exists, update it
+        try {
+          await this.invoke("updateModelTemplates", 6, {
+            model: model.modelName,
+            templates: model.cardTemplates,
+          });
+          modelsUpdated = true;
+          console.log(`Updated templates for model ${model.modelName}`);
+        } catch (e) {
+          console.error(`Failed to update templates for ${model.modelName}`, e);
+        }
+
+        try {
+          await this.invoke("updateModelStyling", 6, {
+            model: model.modelName,
+            css: model.css,
+          });
+          modelsUpdated = true;
+          console.log(`Updated styling for model ${model.modelName}`);
+        } catch (e) {
+          console.error(`Failed to update styling for ${model.modelName}`, e);
+        }
+      }
     }
 
-    const actions: CreateModelAction[] = models.map(modelParams => ({
-      action: "createModel",
-      params: modelParams as unknown as CreateModelParams
-    }));
-
-    try {
-      const results = await this.invoke("multi", 6, { actions: actions });
-      if (results && typeof results === 'object' && !Array.isArray(results) && results.error) {
-        // Ignore "Model name already exists" as this is normal when plugin has run before
-        if (results.error === "Model name already exists") {
-          // console.log("Model already exists, continuing...");
-          return;
+    // If models were updated, display a notification about the improvements
+    if (modelsUpdated) {
+      // Use Notice API from Obsidian to show a notification
+      try {
+        if (typeof Notice !== 'undefined') {
+          new Notice(
+            "MathJax rendering fix applied! You need to: 1) restart Anki, 2) sync your cards again, and 3) check 'Tools > Empty Card Browser Cache' in Anki if formulas still don't render properly.",
+            20000 // Display for 20 seconds
+          );
         }
-        throw results.error;
+      } catch (e) {
+        // Silently ignore if Notice isn't available
+        console.log("Models updated with improved MathJax rendering support");
       }
-      if (Array.isArray(results)) {
-        for (const result of results) {
-          if (result !== null) {
-            // Ignore "Model name already exists" errors for individual models
-            if (typeof result === 'object' && result.error === "Model name already exists") {
-              // console.log("Model already exists, continuing...");
-              continue;
-            }
-            throw result;
-          }
-        }
-        return;
-      } else {
-        throw new Error("Unexpected response structure from Anki multi action");
-      }
-    } catch (error) {
-      // Allow model name exists errors to pass through
-      if (typeof error === 'string' && error.includes("Model name already exists")) {
-        // console.log("Model already exists, continuing...");
-        return;
-      }
-      console.error("Error creating Anki models:", error);
-      throw error;
     }
   }
 
@@ -383,7 +404,7 @@ export class Anki {
   private getModels(
     sourceSupport: boolean,
     codeHighlightSupport: boolean
-  ): object[] {
+  ): AnkiModel[] {
     let sourceFieldContent = "";
     let codeScriptContent = "";
     let sourceExtension = "";
@@ -398,16 +419,90 @@ export class Anki {
       codeExtension = codeDeckExtension;
     }
 
+    // Add MathJax processing script
+    const mathjaxScript = `
+<script>
+  // Ensure MathJax properly initializes and renders all equations
+  function ensureMathJaxRendering() {
+    // First, process custom <anki-mathjax> tags
+    const processMathJaxTags = function() {
+      // Find all <anki-mathjax> elements and convert them to proper MathJax delimiters
+      const mathElements = document.querySelectorAll('anki-mathjax');
+      mathElements.forEach(function(el) {
+        // Get the LaTeX content
+        const latex = el.textContent || '';
+        // Create new span with MathJax delimiters
+        const span = document.createElement('span');
+        span.classList.add('math');
+        // Display the raw latex with MathJax delimiters
+        span.textContent = '\\\\(' + latex + '\\\\)';
+        // Replace the custom tag with the span
+        el.parentNode.replaceChild(span, el);
+      });
+    };
+
+    // Process <anki-mathjax> tags first
+    processMathJaxTags();
+
+    // Some versions of Anki already initialize MathJax
+    // This check ensures we don't interfere with existing MathJax setup
+    if (typeof MathJax === 'undefined') {
+      console.log('MathJax not detected, adding basic configuration');
+      
+      // Add a basic MathJax config if it's not already present
+      window.MathJax = {
+        tex: {
+          inlineMath: [['\\\\(', '\\\\)']],
+          displayMath: [['\\\\[', '\\\\]']]
+        },
+        options: {
+          skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+          processHtmlClass: 'math'
+        }
+      };
+      
+      // Trigger MathJax loading if needed
+      if (document.querySelector('script[src*="MathJax"]') === null) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+        script.async = true;
+        document.head.appendChild(script);
+      }
+    } else if (typeof MathJax.typeset === 'function') {
+      // If MathJax 3 is loaded and ready, typeset the page
+      MathJax.typeset();
+    } else if (typeof MathJax.Hub !== 'undefined' && typeof MathJax.Hub.Queue === 'function') {
+      // If MathJax 2 is loaded, queue a typeset
+      MathJax.Hub.Queue(['Typeset', MathJax.Hub]);
+    }
+  }
+  
+  // Process math when DOM is loaded
+  document.addEventListener('DOMContentLoaded', ensureMathJaxRendering);
+  
+  // Also try immediately in case DOM is already loaded
+  ensureMathJaxRendering();
+</script>`;
+
     const css =
       '.card {\r\n font-family: arial;\r\n font-size: 20px;\r\n color: black;\r\n background-color: white;\r\n}\r\n\r\n.tag::before {\r\n\tcontent: "#";\r\n}\r\n\r\n.tag {\r\n  color: white;\r\n  background-color: #9F2BFF;\r\n  border: none;\r\n  font-size: 11px;\r\n  font-weight: bold;\r\n  padding: 1px 8px;\r\n  margin: 0px 3px;\r\n  text-decoration: none;\r\n  cursor: pointer;\r\n  border-radius: 14px;\r\n  display: inline;\r\n  vertical-align: middle;\r\n}\r\n .cloze { font-weight: bold; color: blue;}.nightMode .cloze { color: lightblue;}';
-    const front = `{{Front}}\r\n<p class=\"tags\">{{Tags}}<\/p>\r\n\r\n<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}`;
+
+    const front = `{{Front}}\r\n<p class=\"tags\">{{Tags}}<\/p>\r\n\r\n<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}${mathjaxScript}`;
+
     const back = `{{FrontSide}}\n\n<hr id=answer>\n\n{{Back}}${sourceFieldContent}`;
-    const frontReversed = `{{Back}}\r\n<p class=\"tags\">{{Tags}}<\/p>\r\n\r\n<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}`;
+    
+    // Apply similar changes to other templates
+    const frontReversed = `{{Back}}\r\n<p class=\"tags\">{{Tags}}<\/p>\r\n\r\n<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}${mathjaxScript}`;
+
     const backReversed = `{{FrontSide}}\n\n<hr id=answer>\n\n{{Front}}${sourceFieldContent}`;
-    const prompt = `{{Prompt}}\r\n<p class=\"tags\">🧠spaced {{Tags}}<\/p>\r\n\r\n<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}`;
+    
+    const prompt = `{{Prompt}}\r\n<p class=\"tags\">🧠spaced {{Tags}}<\/p>\r\n\r\n<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}${mathjaxScript}`;
+    
     const promptBack = `{{FrontSide}}\n\n<hr id=answer>🧠 Review done.${sourceFieldContent}`;
-    const clozeFront = `{{cloze:Text}}\n\n<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}`;
-    const clozeBack = `{{cloze:Text}}\n\n<br>{{Extra}}${sourceFieldContent}<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}`;
+    
+    const clozeFront = `{{cloze:Text}}\n\n<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}${mathjaxScript}`;
+    
+    const clozeBack = `{{cloze:Text}}\n\n<br>{{Extra}}${sourceFieldContent}<script>\r\n    var tagEl = document.querySelector(\'.tags\');\r\n    var tags = tagEl.textContent.trim().split(\' \');\r\n    tagEl.textContent = \'\'; // Clear existing tags\r\n    tags.forEach(function(tag, index) {\r\n\tif (tag) {\r\n\t    var span = document.createElement(\'span\');\r\n        span.classList.add(\'tag\');\r\n        span.textContent = tag;\r\n        tagEl.appendChild(span);\r\n        if (index < tags.length - 1) { // Add space between tags\r\n            tagEl.appendChild(document.createTextNode(\' \'));\r\n        }\r\n\t}\r\n    });\r\n    \r\n<\/script>${codeScriptContent}${mathjaxScript}`;
 
     let classicFields = ["Front", "Back"];
     let promptFields = ["Prompt"];

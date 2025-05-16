@@ -862,7 +862,6 @@ export class Parser {
 
   private parseLine(str: string, vaultName: string, isCallout: boolean = false) {
     // Step 1: Substitute images and audio links first
-    // substituteImageLinks now generates clean HTML img tags without namespace attributes
     let processedStr = this.substituteImageLinks(this.substituteAudioLinks(str));
 
     // Step 2: Substitute obsidian links and math
@@ -870,58 +869,107 @@ export class Parser {
         this.substituteObsidianLinks(processedStr, vaultName)
     );
 
-    // For callouts, we need to be extra careful to preserve the callout syntax
+    // For callouts, we need to preserve the structure
     if (isCallout) {
-      // If we're handling a callout, we need to preserve the callout syntax 
-      // by ensuring the ">" and "[!type]" markers aren't converted 
-      // Sometimes these get wrapped in <p> tags by the converter
-      return processedStr;
+      // For callouts, we need to clean up the callout formatting but preserve the content structure
+      // First, replace the callout indicators with proper HTML
+      
+      // Process each line of the callout
+      const lines = processedStr.split('\n');
+      let processedLines = [];
+      
+      for (let line of lines) {
+        // Remove the > callout indicators but preserve indentation
+        let calloutMatch = line.match(/^(\s*)>+\s*(.*)$/);
+        if (calloutMatch) {
+          // Extract content from the line, preserving any remaining markdown
+          const [_, indentation, content] = calloutMatch;
+          
+          // Check if this is the callout header line
+          const titleMatch = content.match(/^\[!(\w+)\]\s*(?:-|\+)?\s*(.*)$/);
+          if (titleMatch) {
+            // This is a callout header line, extract the type and content
+            const [__, calloutType, calloutContent] = titleMatch;
+            processedLines.push(`<div class="callout ${calloutType.toLowerCase()}"><strong>${calloutContent || calloutType}</strong></div>`);
+          } else if (content.trim()) {
+            // Regular content line - convert any markdown lists to HTML
+            if (content.match(/^[-*+]\s+/)) {
+              // This is a list item
+              processedLines.push(`<ul><li>${content.replace(/^[-*+]\s+/, '')}</li></ul>`);
+            } else if (content.match(/^\d+\.\s+/)) {
+              // This is a numbered list item
+              processedLines.push(`<ol><li>${content.replace(/^\d+\.\s+/, '')}</li></ol>`);
+            } else {
+              // Regular line
+              processedLines.push(`<p>${content}</p>`);
+            }
+          } else {
+            // Empty line
+            processedLines.push('<br>');
+          }
+        } else {
+          // Not a callout line, preserve as-is
+          processedLines.push(line);
+        }
+      }
+      
+      return processedLines.join('\n');
     }
+
+    // Preserve list formatting by adding explicit newlines between items
+    // This helps showdown converter properly recognize the items
+    processedStr = processedStr.replace(/^(\s*[-*+]|\s*\d+\.)\s+/gm, function(match) {
+      // Ensure there's a newline before each list item that isn't at the beginning
+      if (processedStr.indexOf(match) > 0) {
+        return '\n' + match;
+      }
+      return match;
+    });
 
     // Step 3: Convert remaining Markdown to HTML using showdown
     let html = this.htmlConverter.makeHtml(processedStr);
 
     // Step 4: Clean up any duplicate image tags that might still be present
     try {
-        // Skip DOM manipulation in test environment or if document is not available
-        if (process.env.NODE_ENV === 'test' || typeof document === 'undefined') {
-            throw new Error('DOM not available in test environment');
+      // Skip DOM manipulation in test environment or if document is not available
+      if (process.env.NODE_ENV === 'test' || typeof document === 'undefined') {
+        throw new Error('DOM not available in test environment');
+      }
+      
+      // Use DOMParser to parse HTML string into a document
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
+      
+      // Use type assertion to treat the container as an HTMLElement
+      const container = doc.body.firstChild as HTMLElement;
+      
+      if (!container) {
+        throw new Error('Parsing failed');
+      }
+      
+      // Find and remove any duplicate internal-embed divs that follow image tags
+      const embeds = Array.from(container.querySelectorAll('div.internal-embed'));
+      embeds.forEach(embed => {
+        // Check if preceded by an img tag
+        const prevElement = embed.previousElementSibling;
+        if (prevElement && prevElement.tagName === 'IMG') {
+          // Check if image src matches the embed data-src
+          const imgSrc = prevElement.getAttribute('src');
+          const embedSrc = embed.getAttribute('data-src');
+          
+          if (imgSrc && embedSrc && imgSrc.includes(embedSrc)) {
+            // This is a duplicate, remove the div.internal-embed
+            embed.parentNode?.removeChild(embed);
+          }
         }
-        
-        // Use DOMParser to parse HTML string into a document
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(`<div>${html}</div>`, 'text/html');
-        
-        // Use type assertion to treat the container as an HTMLElement
-        const container = doc.body.firstChild as HTMLElement;
-        
-        if (!container) {
-            throw new Error('Parsing failed');
-        }
-        
-        // Find and remove any duplicate internal-embed divs that follow image tags
-        const embeds = Array.from(container.querySelectorAll('div.internal-embed'));
-        embeds.forEach(embed => {
-            // Check if preceded by an img tag
-            const prevElement = embed.previousElementSibling;
-            if (prevElement && prevElement.tagName === 'IMG') {
-                // Check if image src matches the embed data-src
-                const imgSrc = prevElement.getAttribute('src');
-                const embedSrc = embed.getAttribute('data-src');
-                
-                if (imgSrc && embedSrc && imgSrc.includes(embedSrc)) {
-                    // This is a duplicate, remove the div.internal-embed
-                    embed.parentNode?.removeChild(embed);
-                }
-            }
-        });
-        
-        // Get the cleaned HTML back
-        html = container.innerHTML;
-        
+      });
+      
+      // Get the cleaned HTML back
+      html = container.innerHTML;
+      
     } catch (e) {
-        // In test environment or if parsing fails, continue with original HTML
-        console.debug('DOM manipulation skipped or failed:', e);
+      // In test environment or if parsing fails, continue with original HTML
+      console.debug('DOM manipulation skipped or failed:', e);
     }
 
     return html;
@@ -1050,12 +1098,30 @@ export class Parser {
   }
 
   private mathToAnki(str: string) {
+    // Replace block math with Anki-specific MathJax tags
     str = str.replace(this.regex.mathBlock, function (match, p1, p2) {
-      return "\\\\[" + escapeMarkdown(p2) + " \\\\]";
+      // Only escape angle brackets for HTML safety, leave LaTeX intact
+      const safeLatex = p2
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        // Ensure LaTeX commands use single backslashes (not doubled)
+        .replace(/\\\\([a-zA-Z]+)/g, '\\$1');
+      
+      // Use <anki-mathjax> tags instead of MathJax delimiters
+      return "<anki-mathjax>" + safeLatex + "</anki-mathjax>";
     });
 
+    // Replace inline math with Anki-specific MathJax tags
     str = str.replace(this.regex.mathInline, function (match, p1, p2) {
-      return "\\\\(" + escapeMarkdown(p2) + "\\\\)";
+      // Only escape angle brackets for HTML safety, leave LaTeX intact
+      const safeLatex = p2
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        // Ensure LaTeX commands use single backslashes (not doubled)
+        .replace(/\\\\([a-zA-Z]+)/g, '\\$1');
+      
+      // Use <anki-mathjax> tags instead of MathJax delimiters
+      return "<anki-mathjax>" + safeLatex + "</anki-mathjax>";
     });
 
     return str;

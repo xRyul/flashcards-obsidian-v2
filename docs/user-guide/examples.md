@@ -97,7 +97,7 @@ Review notes on cellular respiration #spaced
 Complete practice problems for calculus chapter 5 #spaced
 ```
 
-## Cards with Context (Heading Breadcrumbs)
+## Cards with Context (Show heading path)
 
 ```markdown
 # Biology

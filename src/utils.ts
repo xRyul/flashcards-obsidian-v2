@@ -13,6 +13,14 @@ export function arraysEqual(a: string[], b: string[]) {
 }
 
 export function escapeMarkdown(string: string, skips: string[] = []) {
+  // Skip escaping if the string is already LaTeX (we assume LaTeX if it contains commands)
+  if (string.includes('\\') && (string.includes('\\frac') || string.includes('\\times') || string.includes('\\begin'))) {
+    // For LaTeX content, only escape angle brackets which could mess with HTML
+    return string
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+  
   const replacements: any = [
     // [/\*/g, "\\*", "asterisks"],
     [/#/g, "#", "number signs"],
@@ -36,6 +44,6 @@ export function escapeMarkdown(string: string, skips: string[] = []) {
 }
 
 
-  export function escapeRegExp(str: string) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
-  }
+export function escapeRegExp(str: string) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
+}
