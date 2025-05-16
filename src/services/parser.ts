@@ -36,12 +36,29 @@ export class Parser {
     note: string,
     globalTags: string[] = []
   ): Card[] {
+    // Extract and remove frontmatter from processing
+    let frontmatter = '';
+    let contentWithoutFrontmatter = file;
+    
+    // Extract frontmatter if it exists
+    if (file.startsWith('---')) {
+      const secondDashesPos = file.indexOf('\n---', 4);
+      if (secondDashesPos !== -1) {
+        frontmatter = file.substring(0, secondDashesPos + 4); // Include closing delimiter
+        contentWithoutFrontmatter = file.substring(secondDashesPos + 4);
+      }
+    }
+    
     // Preprocess: Remove all HTML comments except <!-- ankiID: ... -->
-    file = file.replace(/<!--(?!\s*ankiID: \d+\s*-->)([\s\S]*?)-->/g, (match) => {
+    contentWithoutFrontmatter = contentWithoutFrontmatter.replace(/<!--(?!\s*ankiID: \d+\s*-->)([\s\S]*?)-->/g, (match) => {
       // Only keep lines that are exact ankiID comments
       const ankiIdPattern = /^<!--\s*ankiID: \d+\s*-->$/m;
       return match.split('\n').filter(line => ankiIdPattern.test(line)).join('\n');
     });
+    
+    // Reattach frontmatter for proper offset calculations
+    file = frontmatter + contentWithoutFrontmatter;
+    
     const contextAware = this.settings.contextAwareMode;
     let cards: Card[] = [];
     let headings: Heading[] = [];
@@ -153,6 +170,25 @@ export class Parser {
     const contextAware = this.settings.contextAwareMode;
     const cards: Spacedcard[] = [];
     const matches = [...file.matchAll(this.regex.cardsSpacedStyle)];
+    const lines = file.split('\n');
+    const ankiIdRegex = /^<!-- ankiID: (\d+) -->$/;
+    
+    // Check if a line is a heading (starts with #)
+    const isHeading = (line: string): boolean => {
+        return /^#{1,6}\s+/.test(line.trim());
+    };
+    
+    // Helper to find the line number for a given character index
+    const findLineNumber = (index: number): number => {
+        let charCount = 0;
+        for (let i = 0; i < lines.length; i++) {
+            charCount += lines[i].length + 1; // +1 for newline
+            if (index < charCount) {
+                return i;
+            }
+        }
+        return lines.length - 1; // Return last line index if not found earlier
+    };
 
     for (const match of matches) {
       const reversed = false;
@@ -177,11 +213,37 @@ export class Parser {
       prompt = this.parseLine(prompt, vault);
 
       const initialOffset = match.index;
-      const endingLine = match.index + match[0].length;
+      const matchEndOffset = match.index + match[0].length;
+      const currentLineIndex = findLineNumber(initialOffset);
+      
+      // Check if the line following this match is a heading
+      let endOffset = matchEndOffset;
+      let id: number = -1;
+      let inserted: boolean = false;
+      
+      // Process subsequent lines to find ID or a heading boundary
+      if (currentLineIndex < lines.length - 1) {
+          const nextLineIndex = currentLineIndex + 1;
+          const nextLine = lines[nextLineIndex];
+          const nextLineTrimmed = nextLine.trim();
+          
+          // Check if the next line is an ankiID that's not after a heading
+          const potentialIdMatch = nextLineTrimmed.match(ankiIdRegex);
+          if (potentialIdMatch && !isHeading(nextLine)) {
+              id = Number(potentialIdMatch[1]);
+              inserted = true;
+              endOffset = matchEndOffset + nextLine.length + 1; // +1 for newline
+          }
+      }
+      
       const tags: string[] = this.parseTags(match[4], globalTags);
-      // Spaced cards use group 5 for ID
-      const id: number = match[5] ? Number(match[5]) : -1;
-      const inserted: boolean = match[5] ? true : false;
+      
+      // If we don't have an ID from a following line, check the original match
+      if (id === -1 && match[5]) {
+          id = Number(match[5]);
+          inserted = true;
+      }
+      
       const fields: SpacedCardFields = { Prompt: prompt };
       if (this.settings.sourceSupport) {
         fields["Source"] = note;
@@ -195,7 +257,7 @@ export class Parser {
         fields,
         reversed,
         initialOffset,
-        endingLine,
+        endOffset,
         tags,
         inserted,
         medias,
@@ -218,11 +280,30 @@ export class Parser {
     const contextAware = this.settings.contextAwareMode;
     const cards: Clozecard[] = [];
     const matches = [...file.matchAll(this.regex.cardsClozeWholeLine)];
+    const lines = file.split('\n');
+    const ankiIdRegex = /^<!-- ankiID: (\d+) -->$/;
 
     const mathBlocks = [...file.matchAll(this.regex.mathBlock)];
     const mathInline = [...file.matchAll(this.regex.mathInline)];
     const blocksToFilter = [...mathBlocks, ...mathInline];
     const rangesToDiscard = blocksToFilter.map(x => ([x.index, x.index + x[0].length]))
+    
+    // Check if a line is a heading (starts with #)
+    const isHeading = (line: string): boolean => {
+        return /^#{1,6}\s+/.test(line.trim());
+    };
+    
+    // Helper to find the line number for a given character index
+    const findLineNumber = (index: number): number => {
+        let charCount = 0;
+        for (let i = 0; i < lines.length; i++) {
+            charCount += lines[i].length + 1; // +1 for newline
+            if (index < charCount) {
+                return i;
+            }
+        }
+        return lines.length - 1; // Return last line index if not found earlier
+    };
 
     for (const match of matches) {
       const reversed = false;
@@ -274,11 +355,37 @@ export class Parser {
       clozeText = this.parseLine(clozeText, vault);
 
       const initialOffset = match.index;
-      const endingLine = match.index + match[0].length;
+      const matchEndOffset = match.index + match[0].length;
+      const currentLineIndex = findLineNumber(initialOffset);
+      
+      // Check if the line following this match is a heading
+      let endOffset = matchEndOffset;
+      let id: number = -1;
+      let inserted: boolean = false;
+      
+      // Process subsequent lines to find ID or a heading boundary
+      if (currentLineIndex < lines.length - 1) {
+          const nextLineIndex = currentLineIndex + 1;
+          const nextLine = lines[nextLineIndex];
+          const nextLineTrimmed = nextLine.trim();
+          
+          // Check if the next line is an ankiID that's not after a heading
+          const potentialIdMatch = nextLineTrimmed.match(ankiIdRegex);
+          if (potentialIdMatch && !isHeading(nextLine)) {
+              id = Number(potentialIdMatch[1]);
+              inserted = true;
+              endOffset = matchEndOffset + nextLine.length + 1; // +1 for newline
+          }
+      }
+      
       const tags: string[] = this.parseTags(match[4], globalTags);
-      // Cloze cards use group 5 for ID
-      const id: number = match[5] ? Number(match[5]) : -1;
-      const inserted: boolean = match[5] ? true : false;
+      
+      // If we don't have an ID from a following line, check the original match
+      if (id === -1 && match[5]) {
+          id = Number(match[5]);
+          inserted = true;
+      }
+      
       const fields: ClozeCardFields = { Text: clozeText, Extra: "" };
       if (this.settings.sourceSupport) {
         fields["Source"] = note;
@@ -292,7 +399,7 @@ export class Parser {
         fields,
         reversed,
         initialOffset,
-        endingLine,
+        endOffset,
         tags,
         inserted,
         medias,
@@ -338,14 +445,47 @@ export class Parser {
         return lines.length - 1; // Return last line index if not found earlier
     };
 
+    // Check if the match is within frontmatter
+    const isFrontmatter = (index: number): boolean => {
+        // If file doesn't have frontmatter, return false
+        if (!file.startsWith('---')) return false;
+        
+        // Find the closing frontmatter delimiter
+        const secondDashesPos = file.indexOf('\n---', 4);
+        if (secondDashesPos === -1) return false; // No closing frontmatter
+        
+        // Add the length of the closing delimiter to get the end of frontmatter
+        const frontmatterEndPos = secondDashesPos + 4; // Length of \n---
+        
+        // Check if the index falls within the frontmatter (including the delimiters)
+        return index >= 0 && index <= frontmatterEndPos;
+    };
+
+    // Check if a line contains a block ID (^blockid)
+    const hasBlockId = (line: string): boolean => {
+        return /\^[\w\d-]+$/.test(line.trim());
+    };
+
+    // Check if a line is a heading (starts with #)
+    const isHeading = (line: string): boolean => {
+        return /^#{1,6}\s+/.test(line.trim());
+    };
+
     const matches = [...file.matchAll(inlineCardRegex)];
 
     matches.forEach((match, matchIndex) => {
+      // Skip if within frontmatter
+      if (isFrontmatter(match.index)) {
+        return;
+      }
+      
       // Check for metadata lines like cards-deck: or tags:
-      // Use group 1 (potential heading/prefix) or group 3 (potential content) for the check
-      const potentialMetadata = (match[1]?.trim() || "") + (match[3]?.trim() || "");
+      // Use group 1 (potential heading/prefix) or group 2 (potential content) for the check
+      const potentialMetadata = (match[1]?.trim() || "") + (match[2]?.trim() || "");
       if (potentialMetadata.toLowerCase().startsWith("cards-deck:") ||
-          potentialMetadata.toLowerCase().startsWith("tags:")) {
+          potentialMetadata.toLowerCase().startsWith("tags:") ||
+          // Additional frontmatter-like keys to exclude
+          /^[a-zA-Z0-9_-]+:/.test(potentialMetadata)) { // Match any YAML frontmatter-style key
         return; // Skip metadata lines that might resemble inline cards
       }
 
@@ -371,6 +511,12 @@ export class Parser {
       let originalQuestion = match[2] ? match[2].trim() : '';
       // Group 4 is the first line of the answer
       let answerFirstLine = match[4] ? match[4].trim() : '';
+
+      // Check if the answer line contains a block ID and skip if it does
+      if (hasBlockId(answerFirstLine)) {
+        // Don't process this as a card if it's just a block ID reference
+        return;
+      }
 
       // --> FIX: Remove leading Markdown list markers from the correctly identified question <--
       const listMarkerMatch = originalQuestion.match(/^([-*+]\s+)/);
@@ -409,6 +555,15 @@ export class Parser {
               const currentLine = lines[i];
               const currentLineTrimmed = currentLine.trim();
 
+              // Skip block ID lines (^someid) as answer content
+              if (hasBlockId(currentLineTrimmed)) {
+                  // End the card collection before the block ID
+                  break;
+              }
+
+              // Check if the current line is a heading
+              const currentLineIsHeading = isHeading(currentLineTrimmed);
+
               const potentialIdMatch = currentLineTrimmed.match(ankiIdRegex);
 
               // Check if the current line starts *any* kind of card definition
@@ -427,20 +582,19 @@ export class Parser {
               }
 
               if (potentialIdMatch) {
-                  // Found an ID block. Assume it terminates the card content.
-                  // console.log(`>>> Loop Break: Found ID on line ${i}`); // DEBUG LOG REMOVED
-                  id = Number(potentialIdMatch[1]);
-                  inserted = true;
-                  endOffset = currentLineStartOffset + currentLine.length; // Include ID line offset
+                  // Only consider this ID as part of the card if it doesn't follow a heading
+                  if (!currentLineIsHeading) {
+                      // Found an ID block. Assume it terminates the card content.
+                      id = Number(potentialIdMatch[1]);
+                      inserted = true;
+                      endOffset = currentLineStartOffset + currentLine.length; // Include ID line offset
+                  }
                   break; // Stop collecting answer
-              } else if (isNextCardStart || currentLineTrimmed === '') {
-                   // Found the start of the next card or an empty line, stop collecting answer.
-                  // console.log(`>>> Loop Break: Next card (${isNextCardStart}) or empty line (${currentLineTrimmed === ''}) on line ${i}`); // DEBUG LOG REMOVED
-                  // End offset remains the end of the *previous* line (already set).
+              } else if (currentLineIsHeading || isNextCardStart || currentLineTrimmed === '') {
+                   // Found a heading, the start of the next card, or an empty line, stop collecting answer.
                   break;
               } else {
                   // This line is part of the answer
-                  // console.log(`>>> Loop Append: Appending line ${i}: ${JSON.stringify(currentLine)}`); // DEBUG LOG REMOVED
                   answerLines.push(currentLine); // Keep original spacing/indentation
                   endOffset = currentLineStartOffset + currentLine.length; // Extend end offset to include this line
               }
@@ -591,8 +745,12 @@ export class Parser {
             
             for (let i = currentLineIndex + 1; i < lines.length; i++) {
                 const currentLine = lines[i];
+                const currentLineTrimmed = currentLine.trim();
                 const currentLineStartOffset = file.indexOf(currentLine, currentSearchOffset - currentLine.length -1);
-                const potentialIdMatch = currentLine.trim().match(ankiIdRegex);
+                const potentialIdMatch = currentLineTrimmed.match(ankiIdRegex);
+                
+                // Check if the current line is a heading (starts with #)
+                const isHeading = /^#{1,6}\s+/.test(currentLineTrimmed);
                 
                 // If we're inside a callout, check if the current line is still part of it
                 if (isInsideCallout) {
@@ -608,13 +766,16 @@ export class Parser {
                 );
 
                 if (potentialIdMatch) {
-                    // Found an ID block immediately following the answer.
-                    id = Number(potentialIdMatch[1]);
-                    inserted = true;
-                    endOffset = currentLineStartOffset + currentLine.length; // Include ID line
+                    // Only consider this ID as part of the card if it doesn't follow a heading
+                    if (!isHeading) {
+                        // Found an ID block immediately following the answer.
+                        id = Number(potentialIdMatch[1]);
+                        inserted = true;
+                        endOffset = currentLineStartOffset + currentLine.length; // Include ID line
+                    }
                     break; // Stop collecting answer
-                } else if (isNextCardStart || (currentLine.trim() === '' && !isInsideCallout)) {
-                     // Found the start of the next card or an empty line (not in callout), stop collecting answer.
+                } else if (isHeading || isNextCardStart || (currentLine.trim() === '' && !isInsideCallout)) {
+                     // Found a heading, the start of the next card, or an empty line (not in callout), stop collecting answer.
                     // End offset remains the end of the *previous* line.
                     break;
                 } else {
