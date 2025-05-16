@@ -593,6 +593,12 @@ export class Parser {
               } else if (currentLineIsHeading || isNextCardStart || currentLineTrimmed === '') {
                    // Found a heading, the start of the next card, or an empty line, stop collecting answer.
                   break;
+              } else if (i > 0 && answerLines.length > 0 && answerLines[answerLines.length - 1].trim().endsWith('$')) {
+                  // If the previous line ends with a dollar sign (end of math), and this is not the first line,
+                  // stop collecting if the current line looks like new content (not a continuation of math)
+                  if (!currentLine.trim().startsWith('$') && !currentLineTrimmed.includes('::')) {
+                      break;
+                  }
               } else {
                   // This line is part of the answer
                   answerLines.push(currentLine); // Keep original spacing/indentation
