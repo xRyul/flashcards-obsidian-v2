@@ -267,58 +267,232 @@ export class CardsService {
     });
   }
 
+  private debugCardInfo(card: Card, fileContent: string) {
+    console.log("============= DEBUG CARD INFO =============");
+    console.log(`Card ID: ${card.id}`);
+    console.log(`Card initial offset: ${card.initialOffset}`);
+    console.log(`Card end offset: ${card.endOffset}`);
+    
+    // Get content before and after the card end position
+    const contextBefore = fileContent.substring(Math.max(0, card.endOffset - 50), card.endOffset);
+    const contextAfter = fileContent.substring(card.endOffset, Math.min(fileContent.length, card.endOffset + 50));
+    
+    console.log(`Content near end offset:`);
+    console.log(`BEFORE END [${contextBefore}]`);
+    console.log(`AFTER END [${contextAfter}]`);
+    
+    // Check if we're in the middle of a line
+    const lineStart = fileContent.lastIndexOf('\n', card.endOffset - 1) + 1;
+    const lineEnd = fileContent.indexOf('\n', card.endOffset);
+    if (lineEnd > lineStart) {
+      const wholeLine = fileContent.substring(lineStart, lineEnd);
+      const beforeEndInLine = fileContent.substring(lineStart, card.endOffset);
+      const afterEndInLine = fileContent.substring(card.endOffset, lineEnd);
+      
+      console.log(`CURRENT LINE: [${wholeLine}]`);
+      console.log(`SPLIT AT: [${beforeEndInLine}] | [${afterEndInLine}]`);
+    }
+    
+    // Check if character at end offset is in the middle of a math expression
+    const charAtEnd = fileContent.charAt(card.endOffset - 1);
+    const nextChar = fileContent.charAt(card.endOffset);
+    console.log(`Char at end offset-1: "${charAtEnd}" (code: ${charAtEnd.charCodeAt(0)})`);
+    console.log(`Char at end offset: "${nextChar}" (code: ${nextChar.charCodeAt(0)})`);
+    
+    // Check for math expression indicators
+    const mathStart = fileContent.lastIndexOf('$', card.endOffset);
+    const mathEnd = fileContent.indexOf('$', mathStart + 1);
+    if (mathStart !== -1 && mathEnd !== -1 && mathStart < card.endOffset && mathEnd > card.endOffset) {
+      console.log(`WARNING: End offset is inside math expression: ${fileContent.substring(mathStart, mathEnd + 1)}`);
+    }
+    
+    // Check all leading spaces before each line and look for subtle differences
+    const lines = fileContent.split('\n');
+    let lineIndex = 0;
+    let pos = 0;
+    // Find which line contains our end offset
+    for (let i = 0; i < lines.length; i++) {
+      pos += lines[i].length + 1;
+      if (pos > card.endOffset) {
+        lineIndex = i;
+        break;
+      }
+    }
+    
+    // Print a few lines before and after
+    console.log("LINES AROUND OFFSET (with character codes for whitespace):");
+    const startLine = Math.max(0, lineIndex - 3);
+    const endLine = Math.min(lines.length - 1, lineIndex + 3);
+    for (let i = startLine; i <= endLine; i++) {
+      const linePrefix = lines[i].match(/^(\s*>?\s*)/)[0];
+      const linePrefixCodes = [...linePrefix].map(c => c.charCodeAt(0));
+      console.log(`Line ${i}${i === lineIndex ? ' (CURRENT)' : ''}: Leading chars: [${linePrefixCodes.join(', ')}], Content: ${lines[i]}`);
+    }
+    
+    console.log("========== END DEBUG CARD INFO ==========");
+  }
+
   private writeAnkiBlocks(cardsToCreate: Card[]) {
     for (const card of cardsToCreate) {
       // Card.id cannot be null, because if written already previously it has an ID,
       //   if it has been inserted it has an ID too
       if (card.id !== null && !card.inserted) {
+        // Adding detailed debug info
+        console.debug(`\n[DEBUG] Processing card with id=${card.id}`);
+        console.debug(`[DEBUG] Card initial content: "${card.initialContent.substring(0, 50)}..."`);
+        
         card.endOffset += this.totalOffset;
         let offset = card.endOffset;
-        const idString = card.getIdFormat();
+        const idString = card.getIdFormat() + '\n'; // Add newline after the ID
+        
+        console.debug(`[DEBUG] Card has endOffset=${card.endOffset}, totalOffset=${this.totalOffset}`);
         
         // Check if this is a callout card by examining the content at the beginning of the card
         const cardStartPosition = card.initialOffset + this.totalOffset; // Adjust for totalOffset
         const cardStartContent = this.file.substring(cardStartPosition, cardStartPosition + 50); // Check first 50 chars
         const isCallout = cardStartContent.trim().startsWith('>') && cardStartContent.includes('[!');
         
+        console.debug(`[DEBUG] Card start position: ${cardStartPosition}`);
+        console.debug(`[DEBUG] Card start content: "${cardStartContent}"`);
+        console.debug(`[DEBUG] Is callout: ${isCallout}`);
+        
+        // Check if this is an inline card
+        const isInlineCard = card instanceof Inlinecard;
+        console.debug(`[DEBUG] Is inline card: ${isInlineCard}`);
+        
+        // FIRST: Always ensure we're not inserting in the middle of a line
+        // Find the end of the current line containing the offset
+        const contentAfterOffset = this.file.substring(offset);
+        const nextNewlinePos = contentAfterOffset.indexOf('\n');
+        
+        if (nextNewlinePos !== -1) {
+          // Move to the end of the current line
+          offset += nextNewlinePos + 1; // +1 to be after the newline
+          console.debug(`[DEBUG] Found newline at position ${nextNewlinePos}, new offset: ${offset}`);
+        } else {
+          // No newline found, add one to the end of file
+          this.file += '\n';
+          offset = this.file.length;
+          console.debug(`[DEBUG] No newline found, added one at end of file. New offset: ${offset}`);
+        }
+
+        // THEN: Handle specific card types (callout or inline)
         if (isCallout) {
-          // For callouts, find the end of the callout block to ensure ID is placed after it
-          // Get the substring from card start to the current insert position
-          const cardContent = this.file.substring(cardStartPosition, offset);
-          const lines = cardContent.split('\n');
+          // For callouts, find the boundary where the callout ends
+          const lines = this.file.split('\n');
+          console.debug(`[DEBUG] File has ${lines.length} lines`);
           
-          // Find the callout indentation pattern from the first line
-          const calloutMatch = lines[0].match(/^(\s*>[\s>]*)/);
-          const calloutIndentation = calloutMatch ? calloutMatch[1] : '> ';
+          // Find which line contains our card's initial offset (start of the card)
+          let initialLineIndex = -1;
+          let lineStartPos = 0;
           
-          // Check if the last line still has callout formatting
-          // If it does, we need to add the ID on a new line AFTER the callout ends
-          const lastLine = lines[lines.length - 1];
-          if (lastLine.startsWith(calloutIndentation)) {
-            // Find the first line after the callout block that doesn't have the indentation
-            let lineAfterCallout = offset;
-            let currentPos = offset;
-            const remainingContent = this.file.substring(offset);
-            const remainingLines = remainingContent.split('\n');
-            
-            for (let i = 0; i < remainingLines.length; i++) {
-              // If we find a line that doesn't start with the callout indentation
-              // or is empty, that's where we should insert
-              if (!remainingLines[i].startsWith(calloutIndentation) || remainingLines[i].trim() === '') {
-                lineAfterCallout = currentPos;
-                break;
-              }
-              currentPos += remainingLines[i].length + 1; // +1 for newline
+          for (let i = 0; i < lines.length; i++) {
+            if (lineStartPos + lines[i].length >= cardStartPosition) {
+              initialLineIndex = i;
+              console.debug(`[DEBUG] Found card start at line ${i}: "${lines[i].substring(0, 50)}..."`);
+              break;
+            }
+            lineStartPos += lines[i].length + 1; // +1 for newline
+          }
+          
+          console.debug(`[DEBUG] Card starts at line ${initialLineIndex}`);
+          
+          // Get the indentation pattern of the callout from the initial line
+          let calloutIndentation = '';
+          if (initialLineIndex >= 0) {
+            const match = lines[initialLineIndex].match(/^(\s*>[\s>]*)/);
+            if (match) {
+              calloutIndentation = match[1];
+              console.debug(`[DEBUG] Detected callout indentation pattern: "${calloutIndentation.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`);
             }
             
-            // Update the insert position to be AFTER the callout block
-            offset = lineAfterCallout;
+            // Find the end of THIS specific callout by looking for where the pattern stops
+            // or where an empty line appears
+            let calloutEndLine = initialLineIndex + 1;
+            
+            console.debug(`[DEBUG] Starting search for callout end at line ${calloutEndLine}`);
+            
+            while (calloutEndLine < lines.length) {
+              const line = lines[calloutEndLine];
+              
+              // Check if the current line is the start of a new callout
+              // Only consider it a new callout if we're beyond the first line of our current callout
+              const isNewCallout = calloutEndLine > initialLineIndex && 
+                                  line.trim().startsWith('>') && 
+                                  line.includes('[!');
+              const startsWithIndentation = line.startsWith(calloutIndentation);
+              const isEmpty = line.trim() === '';
+              
+              console.debug(`[DEBUG] Examining line ${calloutEndLine}: "${line.substring(0, 50)}..."`);
+              console.debug(`[DEBUG]   - Is new callout: ${isNewCallout}`);
+              console.debug(`[DEBUG]   - Starts with correct indentation: ${startsWithIndentation}`);
+              console.debug(`[DEBUG]   - Is empty line: ${isEmpty}`);
+              
+              // If the line doesn't start with the callout pattern and isn't empty, we've left the callout
+              // OR if we detect a new callout (not the first line), it's a new card
+              if ((!startsWithIndentation && !isEmpty) || isNewCallout) {
+                console.debug(`[DEBUG] Breaking at line ${calloutEndLine}: New callout or indentation change detected`);
+                break;
+              }
+              
+              // If this is an empty line or the end of our content, break
+              if (isEmpty) {
+                console.debug(`[DEBUG] Breaking at line ${calloutEndLine}: Empty line detected`);
+                break;
+              }
+              
+              calloutEndLine++;
+            }
+            
+            // Insert right after the last line of THIS callout
+            let newOffset = 0;
+            for (let i = 0; i <= calloutEndLine; i++) {
+              if (i < calloutEndLine) {
+                newOffset += lines[i].length + 1; // +1 for newline
+              }
+            }
+            
+            console.debug(`[DEBUG] Callout ends at line ${calloutEndLine}: "${lines[calloutEndLine-1].substring(0, 50)}..."`);
+            console.debug(`[DEBUG] New insertion offset: ${newOffset} (changed from ${offset})`);
+            
+            // Use this position for insertion
+            offset = newOffset;
           }
+        } else if (isInlineCard) {
+          // For inline cards, we already moved to the end of the line above
+          // No need for additional positioning
+          console.debug(`[DEBUG] Using end-of-line positioning for inline card, offset: ${offset}`);
         }
 
         // Check if the character before the insertion point is already a newline
         const precedingChar = this.file.charAt(offset - 1);
-        const stringToInsert = precedingChar === '\n' ? idString : '\n' + idString;
+        
+        // Check for existing consecutive newlines to avoid adding extra blank lines
+        let stringToInsert;
+        if (precedingChar === '\n') {
+          // We already have a newline, so just add the ID without an extra newline
+          stringToInsert = idString;
+          
+          // Check if we have consecutive newlines (would cause a blank line)
+          if (offset >= 2 && this.file.charAt(offset - 2) === '\n') {
+            console.debug(`[DEBUG] Detected consecutive newlines, removing one`);
+            // Go back one character to overwrite one of the newlines
+            offset -= 1;
+          }
+        } else {
+          // No newline before insertion point, add one
+          stringToInsert = '\n' + idString;
+        }
+        
+        console.debug(`[DEBUG] Character before insertion: "${precedingChar}" (charCode: ${precedingChar.charCodeAt(0)})`);
+        console.debug(`[DEBUG] String to insert: "${stringToInsert.replace(/\n/g, '\\n')}"`);
+        console.debug(`[DEBUG] Final insertion offset: ${offset}`);
+        
+        // Extract context around insertion point for debugging
+        const before = this.file.substring(Math.max(0, offset - 50), offset);
+        const after = this.file.substring(offset, Math.min(this.file.length, offset + 50));
+        console.debug(`[DEBUG] Content before insertion: "${before}"`);
+        console.debug(`[DEBUG] Content after insertion: "${after}"`);
 
         this.updateFile = true;
         this.file =
@@ -326,6 +500,8 @@ export class CardsService {
           stringToInsert +
           this.file.substring(offset, this.file.length + 1);
         this.totalOffset += stringToInsert.length;
+        
+        console.debug(`[DEBUG] ID insertion complete, new totalOffset: ${this.totalOffset}`);
       }
     }
   }
@@ -530,7 +706,7 @@ export class CardsService {
   
   private addMissingIdToCard(card: Card): string {
     let fileContent = this.file;
-    const idString = card.getIdFormat();
+    const idString = card.getIdFormat() + '\n'; // Add newline after the ID
     
     // Find the end of the card content based on the endOffset
     let insertPosition = card.endOffset;
@@ -540,49 +716,124 @@ export class CardsService {
     const cardStartContent = fileContent.substring(cardStartPosition, cardStartPosition + 50); // Check first 50 chars
     const isCallout = cardStartContent.trim().startsWith('>') && cardStartContent.includes('[!');
     
+    // Check if this is an inline card
+    const isInlineCard = card instanceof Inlinecard;
+    
+    // FIRST: Always ensure we're not inserting in the middle of a line
+    // Find the end of the current line containing the insert position
+    const contentAfterPosition = fileContent.substring(insertPosition);
+    const nextNewlinePos = contentAfterPosition.indexOf('\n');
+    
+    if (nextNewlinePos !== -1) {
+      // Move to the end of the current line
+      insertPosition += nextNewlinePos + 1; // +1 to be after the newline
+    } else {
+      // No newline found, add one to the end of file
+      fileContent += '\n';
+      insertPosition = fileContent.length;
+    }
+    
+    // THEN: Handle specific card types (callout or inline)
     if (isCallout) {
-      // For callouts, find the end of the callout block to ensure ID is placed after it
-      // Get the substring from card start to the current insert position
-      const cardContent = fileContent.substring(cardStartPosition, insertPosition);
-      const lines = cardContent.split('\n');
+      // For callouts, find the boundary where the callout ends
+      const lines = fileContent.split('\n');
       
-      // Find the callout indentation pattern from the first line
-      const calloutMatch = lines[0].match(/^(\s*>[\s>]*)/);
-      const calloutIndentation = calloutMatch ? calloutMatch[1] : '> ';
+      // Find which line contains our initial offset
+      let lineStartPos = 0;
+      let lineIndex = -1;
       
-      // Check if the last line still has callout formatting
-      // If it does, we need to add the ID on a new line AFTER the callout ends
-      const lastLine = lines[lines.length - 1];
-      if (lastLine.startsWith(calloutIndentation)) {
-        // Find the first line after the callout block that doesn't have the indentation
-        let lineAfterCallout = insertPosition;
-        let currentPos = insertPosition;
-        const remainingContent = fileContent.substring(insertPosition);
-        const remainingLines = remainingContent.split('\n');
-        
-        for (let i = 0; i < remainingLines.length; i++) {
-          // If we find a line that doesn't start with the callout indentation
-          // or is empty, that's where we should insert
-          if (!remainingLines[i].startsWith(calloutIndentation) || remainingLines[i].trim() === '') {
-            lineAfterCallout = currentPos;
-            break;
-          }
-          currentPos += remainingLines[i].length + 1; // +1 for newline
+      for (let i = 0; i < lines.length; i++) {
+        lineStartPos += lines[i].length + 1; // +1 for newline
+        if (lineStartPos > insertPosition) {
+          lineIndex = i;
+          break;
+        }
+      }
+      
+      if (lineIndex >= 0) {
+        // Get the indentation pattern of the callout from the line
+        let calloutIndentation = '';
+        const match = lines[lineIndex].match(/^(\s*>[\s>]*)/);
+        if (match) {
+          calloutIndentation = match[1];
+          console.debug(`[DEBUG] Detected callout indentation pattern in addMissingIdToCard: "${calloutIndentation.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`);
         }
         
-        // Update the insert position to be AFTER the callout block
-        insertPosition = lineAfterCallout;
+        // Find the last line of this callout, watching for where the pattern stops
+        // or where a new callout starts
+        let calloutEndLine = lineIndex + 1;
+        
+        while (calloutEndLine < lines.length) {
+          const line = lines[calloutEndLine];
+          
+          // Check if the current line is the start of a new callout
+          // Only consider it a new callout if we're beyond the first line of our current callout
+          const isNewCallout = calloutEndLine > lineIndex && 
+                              line.trim().startsWith('>') && 
+                              line.includes('[!');
+          const startsWithIndentation = line.startsWith(calloutIndentation);
+          const isEmpty = line.trim() === '';
+          
+          console.debug(`[DEBUG] addMissingIdToCard: Examining line ${calloutEndLine}: "${line.substring(0, 50)}..."`);
+          console.debug(`[DEBUG]   - Is new callout: ${isNewCallout}`);
+          console.debug(`[DEBUG]   - Starts with correct indentation: ${startsWithIndentation}`);
+          console.debug(`[DEBUG]   - Is empty line: ${isEmpty}`);
+          
+          // If the line doesn't match our callout pattern and isn't empty, we've left the callout
+          // OR if it's the start of a new callout, stop here
+          if ((!startsWithIndentation && !isEmpty) || isNewCallout) {
+            console.debug(`[DEBUG] Breaking at line ${calloutEndLine}: New callout or indentation change detected`);
+            break;
+          }
+          
+          // If this is an empty line, stop
+          if (isEmpty) {
+            console.debug(`[DEBUG] Breaking at line ${calloutEndLine}: Empty line detected`);
+            break;
+          }
+          
+          calloutEndLine++;
+        }
+        
+        // Insert right after the last line of this callout
+        let newOffset = 0;
+        for (let i = 0; i < calloutEndLine; i++) {
+          newOffset += lines[i].length + 1; // +1 for newline
+        }
+        
+        console.debug(`[DEBUG] Callout ends at line ${calloutEndLine-1}: "${lines[calloutEndLine-1].substring(0, 50)}..."`);
+        console.debug(`[DEBUG] New insertion offset: ${newOffset} (changed from ${insertPosition})`);
+        
+        // Use this position for insertion
+        insertPosition = newOffset;
       }
+    } else if (isInlineCard) {
+      // For inline cards, we already moved to the end of the line above
+      // No need for additional positioning
     }
     
     // Ensure we insert on a new line
-    if (fileContent.charAt(insertPosition - 1) !== '\n') {
-      // Add newline before ID if not already present
-      fileContent = fileContent.substring(0, insertPosition) + '\n' + idString + fileContent.substring(insertPosition);
+    const precedingChar = fileContent.charAt(insertPosition - 1);
+    
+    // Check for existing consecutive newlines to avoid adding extra blank lines
+    let stringToInsert;
+    if (precedingChar === '\n') {
+      // We already have a newline, so just add the ID without an extra newline
+      stringToInsert = idString;
+      
+      // Check if we have consecutive newlines (would cause a blank line)
+      if (insertPosition >= 2 && fileContent.charAt(insertPosition - 2) === '\n') {
+        console.debug(`[DEBUG] Detected consecutive newlines in addMissingIdToCard, removing one`);
+        // Go back one character to overwrite one of the newlines
+        insertPosition -= 1;
+      }
     } else {
-      // Insert ID on the existing newline
-      fileContent = fileContent.substring(0, insertPosition) + idString + fileContent.substring(insertPosition);
+      // No newline before insertion point, add one
+      stringToInsert = '\n' + idString;
     }
+    
+    // Insert the ID at the calculated position
+    fileContent = fileContent.substring(0, insertPosition) + stringToInsert + fileContent.substring(insertPosition);
     
     return fileContent;
   }

@@ -592,31 +592,77 @@ export class Parser {
                 });
               }
 
-              if (potentialIdMatch) {
-                  // Only consider this ID as part of the card if it doesn't follow a heading
-                  if (!currentLineIsHeading) {
-                      // Found an ID block. Assume it terminates the card content.
-                      id = Number(potentialIdMatch[1]);
-                      inserted = true;
-                      endOffset = currentLineStartOffset + currentLine.length; // Include ID line offset
-                  }
-                  break; // Stop collecting answer
-              } else if (currentLineIsHeading || isNextCardStart || currentLineTrimmed === '' || isListItem) {
-                   // Found a heading, the start of the next card, an empty line, or a new list item - stop collecting answer.
-                  break;
-              } else if (i > 0 && answerLines.length > 0 && answerLines[answerLines.length - 1].trim().endsWith('$')) {
-                  // If the previous line ends with a dollar sign (end of math), and this is not the first line,
-                  // stop collecting if the current line looks like new content (not a continuation of math)
-                  if (!currentLine.trim().startsWith('$') && !currentLineTrimmed.includes('::')) {
-                      break;
-                  }
-              } else {
-                  // This line is part of the answer
-                  answerLines.push(currentLine); // Keep original spacing/indentation
-                  endOffset = currentLineStartOffset + currentLine.length; // Extend end offset to include this line
-              }
-              // Update offset for the start of the *next* line for the next iteration
-              currentLineStartOffset += currentLine.length + 1;
+              // Check if the current line is the start of another callout block
+              const isNewCalloutStart = currentLine.trim().startsWith('>') && 
+                                        currentLine.includes('[!') && 
+                                        i > currentLineIndex + 1; // Must not be the same line as our card start
+                
+                console.debug(`[PARSER DEBUG] Examining line ${i}: "${currentLine}"`);
+                console.debug(`[PARSER DEBUG]   - Is potential ID: ${potentialIdMatch !== null}`);
+                console.debug(`[PARSER DEBUG]   - Is heading: ${isHeading}`);
+                console.debug(`[PARSER DEBUG]   - Is inside callout: ${isNextCardStart}`);
+                console.debug(`[PARSER DEBUG]   - Is new callout start: ${isNewCalloutStart}`);
+                console.debug(`[PARSER DEBUG]   - Is empty line: ${currentLineTrimmed === ''}`);
+
+                if (potentialIdMatch) {
+                    // Only consider this ID as part of the card if it doesn't follow a heading
+                    if (!isHeading) {
+                        // Found an ID block immediately following the answer.
+                        id = Number(potentialIdMatch[1]);
+                        inserted = true;
+                        endOffset = currentLineStartOffset + currentLine.length; // Include ID line
+                        console.debug(`[PARSER DEBUG] Found ID ${id} at line ${i}`);
+                    }
+                    break; // Stop collecting answer
+                } else if (isHeading || isNextCardStart || isNewCalloutStart || (currentLineTrimmed === '' && !isNextCardStart)) {
+                    // Found a heading, the start of the next card, another callout, or an empty line (not in callout), stop collecting answer.
+                    // End offset remains the end of the *previous* line.
+                    console.debug(`[PARSER DEBUG] Stopping answer collection at line ${i}. Reason: ${isHeading ? 'Heading' : 
+                                                                                               isNextCardStart ? 'Next card' : 
+                                                                                               isNewCalloutStart ? 'New callout' : 
+                                                                                               'Empty line'}`);
+                    break;
+                } else {
+                    // Check for math handling
+                    if (answerLines.length > 0) {
+                        // Improved math handling - check for unclosed math expressions
+                        const allContentSoFar = answerLines.join('\n');
+                        
+                        // Count dollar signs to see if we're inside a math expression
+                        const dollarCount = (allContentSoFar.match(/\$/g) || []).length;
+                        const insideMathExpression = dollarCount % 2 !== 0; // Odd number means unclosed
+                        
+                        // Also check for unclosed \begin{...} environments
+                        const beginCount = (allContentSoFar.match(/\\begin\{/g) || []).length;
+                        const endCount = (allContentSoFar.match(/\\end\{/g) || []).length;
+                        const insideBeginEnd = beginCount > endCount;
+                        
+                        // Handle math expressions spanning lines
+                        if (insideMathExpression || insideBeginEnd || 
+                            (currentLine.includes('$') && (currentLine.match(/\$/g) || []).length % 2 !== 0) ||
+                            (answerLines[answerLines.length-1].trim().endsWith('$') && 
+                             !answerLines[answerLines.length-1].trim().endsWith('\\$') && 
+                             currentLine.includes('$'))) {
+                            // This line is part of a math expression that needs to be kept together
+                            if (currentLineTrimmed !== '') {
+                                answerLines.push(currentLine);
+                            }
+                            answerLines.push(currentLine);
+                            endOffset = currentLineStartOffset + currentLine.length;
+                            currentLineStartOffset += currentLine.length + 1;
+                            continue;
+                        }
+                    }
+                    
+                    // This line is part of the answer
+                    if (currentLineTrimmed !== '') {
+                        answerLines.push(currentLine);
+                    }
+                    answerLines.push(currentLine);
+                    endOffset = currentLineStartOffset + currentLine.length; // Extend end offset to include this line
+                }
+                // Update offset for the start of the *next* line for the next iteration
+                currentLineStartOffset += currentLine.length + 1;
           }
       }
 
@@ -689,11 +735,16 @@ export class Parser {
     note: string,
     globalTags: string[] = []
   ): Flashcard[] {
+    console.debug("\n[PARSER DEBUG] Starting generateCardsWithTag");
+    
     const contextAware = this.settings.contextAwareMode;
     const cards: Flashcard[] = [];
     // Use the simplified regex that matches only the start line
     const matches = [...file.matchAll(this.regex.flashscardsWithTag)];
+    console.debug(`[PARSER DEBUG] Found ${matches.length} potential cards with #card tag`);
+    
     const lines = file.split('\n');
+    console.debug(`[PARSER DEBUG] File has ${lines.length} lines`);
     const ankiIdRegex = /^<!-- ankiID: (\d+) -->$/;
 
     // Helper to find the line number for a given character index
@@ -709,10 +760,14 @@ export class Parser {
     };
 
     matches.forEach((match, matchIndex) => {
+        console.debug(`\n[PARSER DEBUG] Processing card match ${matchIndex + 1}/${matches.length}`);
+        
         const initialOffset = match.index;
         const matchedLine = match[0];
         const matchEndOffset = initialOffset + matchedLine.length;
 
+        console.debug(`[PARSER DEBUG] Card starts at offset ${initialOffset}, line content: "${matchedLine}"`);
+        
         // Determine if reversed based on #card-reverse or #card/reverse tag
         const reversed: boolean =
             match[3].trim().toLowerCase() ===
@@ -745,20 +800,27 @@ export class Parser {
         let endOffset = matchEndOffset; // Start end offset at end of matched line
         let currentSearchOffset = matchEndOffset + 1; // Start search *after* the matched line
         
+        console.debug(`[PARSER DEBUG] Card starts at line ${currentLineIndex}`);
+        
         // Check if the card is in a callout block by looking at the start of the matched line
         const isCallout = matchedLine.trim().startsWith('>') && matchedLine.includes('[!');
+        console.debug(`[PARSER DEBUG] Is callout card: ${isCallout}`);
 
         if (currentLineIndex !== -1) {
             let isInsideCallout = isCallout;
             let calloutIndentation = '';
+            let lastNonEmptyLine = '';
             
             // If this is a callout, capture its indentation pattern
             if (isCallout) {
                 const match = matchedLine.match(/^(\s*>[\s>]*)/);
                 if (match) {
                     calloutIndentation = match[1];
+                    console.debug(`[PARSER DEBUG] Detected callout indentation pattern: "${calloutIndentation}"`);
                 }
             }
+            
+            console.debug(`[PARSER DEBUG] Starting to collect answer lines from line ${currentLineIndex + 1}`);
             
             for (let i = currentLineIndex + 1; i < lines.length; i++) {
                 const currentLine = lines[i];
@@ -771,16 +833,31 @@ export class Parser {
                 
                 // If we're inside a callout, check if the current line is still part of it
                 if (isInsideCallout) {
-                    // If line doesn't start with '>' pattern, we're leaving the callout
-                    if (!currentLine.startsWith(calloutIndentation) && currentLine.trim() !== '') {
+                    // If line doesn't start with '>' pattern and isn't empty, we're leaving the callout
+                    const stillInCallout = currentLine.startsWith(calloutIndentation) || currentLineTrimmed === '';
+                    if (!stillInCallout) {
+                        console.debug(`[PARSER DEBUG] Leaving callout at line ${i}: "${currentLine}"`);
                         isInsideCallout = false;
                     }
                 }
 
+                // Check if the current line is the start of another callout block
+                const isNewCalloutStart = currentLine.trim().startsWith('>') && 
+                                          currentLine.includes('[!') && 
+                                          i > currentLineIndex + 1; // Must not be the same line as our card start
+                
                 // Check if the current line is the start of the *next* #card match
                 const isNextCardStart = matches.some((nextMatch, nextMatchIdx) =>
                     nextMatchIdx > matchIndex && nextMatch.index === currentLineStartOffset
                 );
+                
+                console.debug(`[PARSER DEBUG] Examining line ${i}: "${currentLine}"`);
+                console.debug(`[PARSER DEBUG]   - Is potential ID: ${potentialIdMatch !== null}`);
+                console.debug(`[PARSER DEBUG]   - Is heading: ${isHeading}`);
+                console.debug(`[PARSER DEBUG]   - Is inside callout: ${isInsideCallout}`);
+                console.debug(`[PARSER DEBUG]   - Is next card start: ${isNextCardStart}`);
+                console.debug(`[PARSER DEBUG]   - Is new callout start: ${isNewCalloutStart}`);
+                console.debug(`[PARSER DEBUG]   - Is empty line: ${currentLineTrimmed === ''}`);
 
                 if (potentialIdMatch) {
                     // Only consider this ID as part of the card if it doesn't follow a heading
@@ -789,25 +866,69 @@ export class Parser {
                         id = Number(potentialIdMatch[1]);
                         inserted = true;
                         endOffset = currentLineStartOffset + currentLine.length; // Include ID line
+                        console.debug(`[PARSER DEBUG] Found ID ${id} at line ${i}`);
                     }
                     break; // Stop collecting answer
-                } else if (isHeading || isNextCardStart || (currentLine.trim() === '' && !isInsideCallout)) {
-                     // Found a heading, the start of the next card, or an empty line (not in callout), stop collecting answer.
+                } else if (isHeading || isNextCardStart || isNewCalloutStart || (currentLineTrimmed === '' && !isInsideCallout)) {
+                    // Found a heading, the start of the next card, another callout, or an empty line (not in callout), stop collecting answer.
                     // End offset remains the end of the *previous* line.
+                    console.debug(`[PARSER DEBUG] Stopping answer collection at line ${i}. Reason: ${isHeading ? 'Heading' : 
+                                                                                               isNextCardStart ? 'Next card' : 
+                                                                                               isNewCalloutStart ? 'New callout' : 
+                                                                                               'Empty line'}`);
                     break;
                 } else {
+                    // Check for math handling
+                    if (answerLines.length > 0) {
+                        // Improved math handling - check for unclosed math expressions
+                        const allContentSoFar = answerLines.join('\n');
+                        
+                        // Count dollar signs to see if we're inside a math expression
+                        const dollarCount = (allContentSoFar.match(/\$/g) || []).length;
+                        const insideMathExpression = dollarCount % 2 !== 0; // Odd number means unclosed
+                        
+                        // Also check for unclosed \begin{...} environments
+                        const beginCount = (allContentSoFar.match(/\\begin\{/g) || []).length;
+                        const endCount = (allContentSoFar.match(/\\end\{/g) || []).length;
+                        const insideBeginEnd = beginCount > endCount;
+                        
+                        // Handle math expressions spanning lines
+                        if (insideMathExpression || insideBeginEnd || 
+                            (currentLine.includes('$') && (currentLine.match(/\$/g) || []).length % 2 !== 0) ||
+                            (answerLines[answerLines.length-1].trim().endsWith('$') && 
+                             !answerLines[answerLines.length-1].trim().endsWith('\\$') && 
+                             currentLine.includes('$'))) {
+                            // This line is part of a math expression that needs to be kept together
+                            if (currentLineTrimmed !== '') {
+                                lastNonEmptyLine = currentLine;
+                            }
+                            answerLines.push(currentLine);
+                            endOffset = currentLineStartOffset + currentLine.length;
+                            currentSearchOffset = currentLineStartOffset + currentLine.length + 1;
+                            console.debug(`[PARSER DEBUG] Added math line to answer: "${currentLine}"`);
+                            continue;
+                        }
+                    }
+                    
                     // This line is part of the answer
+                    if (currentLineTrimmed !== '') {
+                        lastNonEmptyLine = currentLine;
+                    }
                     answerLines.push(currentLine);
                     endOffset = currentLineStartOffset + currentLine.length; // Extend end offset
-                    currentSearchOffset = endOffset + 1;
+                    currentSearchOffset = currentLineStartOffset + currentLine.length + 1;
+                    console.debug(`[PARSER DEBUG] Added line to answer: "${currentLine}"`);
                 }
             }
         }
 
         let answer = answerLines.join('\n').trim();
+        console.debug(`[PARSER DEBUG] Collected answer (first 50 chars): "${answer.substring(0, 50)}..."`);
+        console.debug(`[PARSER DEBUG] Final endOffset: ${endOffset}`);
+        console.debug(`[PARSER DEBUG] Card ID: ${id}, Inserted: ${inserted}`);
         // --- End Answer/ID Finding ---
 
-        // Process question/answer for links, media, markdown, etc.
+        // Process question/answer links, media, markdown, etc.
         let medias: string[] = this.getImageLinks(question);
         medias = medias.concat(this.getImageLinks(answer));
         medias = medias.concat(this.getAudioLinks(answer));
