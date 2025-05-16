@@ -61,9 +61,9 @@ export class Regex {
     const flags = "gimu";
     // https://regex101.com/r/p3yQwY/2
     let str =
-      // Simplified regex: Matches optional markers, captures first line content, #card tag, and optional following tags.
-      // It does NOT capture the answer or the ID block.
-      "^(?:> *)?(?:(?:[-*+]|\\d+\\.) *)?( {0,3}[#]*)((?:[^\\n])+?)(#" +
+      // Updated regex: Improved to handle Obsidian callouts with [!type] syntax
+      // It matches the callout prefix, captures first line content, #card tag, and optional following tags
+      "^(?:> *(?:\\[!\\w+\\](?:-|\\+)? *)?)?(?:(?:[-*+]|\\d+\\.) *)?( {0,3}[#]*)((?:[^\\n])+?)(#" +
       settings.flashcardsTag +
       "(?:[/-]reverse)?)((?: *#[\\p{Number}\\p{Letter}\\-\\/_]+)*) *?$"; // Match end of line
     this.flashscardsWithTag = new RegExp(str, flags);

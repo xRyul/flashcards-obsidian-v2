@@ -277,8 +277,48 @@ export class CardsService {
       //   if it has been inserted it has an ID too
       if (card.id !== null && !card.inserted) {
         card.endOffset += this.totalOffset;
-        const offset = card.endOffset;
+        let offset = card.endOffset;
         const idString = card.getIdFormat();
+        
+        // Check if this is a callout card by examining the content at the beginning of the card
+        const cardStartPosition = card.initialOffset + this.totalOffset; // Adjust for totalOffset
+        const cardStartContent = this.file.substring(cardStartPosition, cardStartPosition + 50); // Check first 50 chars
+        const isCallout = cardStartContent.trim().startsWith('>') && cardStartContent.includes('[!');
+        
+        if (isCallout) {
+          // For callouts, find the end of the callout block to ensure ID is placed after it
+          // Get the substring from card start to the current insert position
+          const cardContent = this.file.substring(cardStartPosition, offset);
+          const lines = cardContent.split('\n');
+          
+          // Find the callout indentation pattern from the first line
+          const calloutMatch = lines[0].match(/^(\s*>[\s>]*)/);
+          const calloutIndentation = calloutMatch ? calloutMatch[1] : '> ';
+          
+          // Check if the last line still has callout formatting
+          // If it does, we need to add the ID on a new line AFTER the callout ends
+          const lastLine = lines[lines.length - 1];
+          if (lastLine.startsWith(calloutIndentation)) {
+            // Find the first line after the callout block that doesn't have the indentation
+            let lineAfterCallout = offset;
+            let currentPos = offset;
+            const remainingContent = this.file.substring(offset);
+            const remainingLines = remainingContent.split('\n');
+            
+            for (let i = 0; i < remainingLines.length; i++) {
+              // If we find a line that doesn't start with the callout indentation
+              // or is empty, that's where we should insert
+              if (!remainingLines[i].startsWith(calloutIndentation) || remainingLines[i].trim() === '') {
+                lineAfterCallout = currentPos;
+                break;
+              }
+              currentPos += remainingLines[i].length + 1; // +1 for newline
+            }
+            
+            // Update the insert position to be AFTER the callout block
+            offset = lineAfterCallout;
+          }
+        }
 
         // Check if the character before the insertion point is already a newline
         const precedingChar = this.file.charAt(offset - 1);
@@ -498,6 +538,46 @@ export class CardsService {
     
     // Find the end of the card content based on the endOffset
     let insertPosition = card.endOffset;
+    
+    // Check if this is a callout card by examining the content at the beginning of the card
+    const cardStartPosition = card.initialOffset;
+    const cardStartContent = fileContent.substring(cardStartPosition, cardStartPosition + 50); // Check first 50 chars
+    const isCallout = cardStartContent.trim().startsWith('>') && cardStartContent.includes('[!');
+    
+    if (isCallout) {
+      // For callouts, find the end of the callout block to ensure ID is placed after it
+      // Get the substring from card start to the current insert position
+      const cardContent = fileContent.substring(cardStartPosition, insertPosition);
+      const lines = cardContent.split('\n');
+      
+      // Find the callout indentation pattern from the first line
+      const calloutMatch = lines[0].match(/^(\s*>[\s>]*)/);
+      const calloutIndentation = calloutMatch ? calloutMatch[1] : '> ';
+      
+      // Check if the last line still has callout formatting
+      // If it does, we need to add the ID on a new line AFTER the callout ends
+      const lastLine = lines[lines.length - 1];
+      if (lastLine.startsWith(calloutIndentation)) {
+        // Find the first line after the callout block that doesn't have the indentation
+        let lineAfterCallout = insertPosition;
+        let currentPos = insertPosition;
+        const remainingContent = fileContent.substring(insertPosition);
+        const remainingLines = remainingContent.split('\n');
+        
+        for (let i = 0; i < remainingLines.length; i++) {
+          // If we find a line that doesn't start with the callout indentation
+          // or is empty, that's where we should insert
+          if (!remainingLines[i].startsWith(calloutIndentation) || remainingLines[i].trim() === '') {
+            lineAfterCallout = currentPos;
+            break;
+          }
+          currentPos += remainingLines[i].length + 1; // +1 for newline
+        }
+        
+        // Update the insert position to be AFTER the callout block
+        insertPosition = lineAfterCallout;
+      }
+    }
     
     // Ensure we insert on a new line
     if (fileContent.charAt(insertPosition - 1) !== '\n') {

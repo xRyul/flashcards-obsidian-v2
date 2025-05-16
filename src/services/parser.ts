@@ -573,18 +573,39 @@ export class Parser {
         let currentLineIndex = findLineNumber(initialOffset);
         let endOffset = matchEndOffset; // Start end offset at end of matched line
         let currentSearchOffset = matchEndOffset + 1; // Start search *after* the matched line
+        
+        // Check if the card is in a callout block by looking at the start of the matched line
+        const isCallout = matchedLine.trim().startsWith('>') && matchedLine.includes('[!');
 
         if (currentLineIndex !== -1) {
+            let isInsideCallout = isCallout;
+            let calloutIndentation = '';
+            
+            // If this is a callout, capture its indentation pattern
+            if (isCallout) {
+                const match = matchedLine.match(/^(\s*>[\s>]*)/);
+                if (match) {
+                    calloutIndentation = match[1];
+                }
+            }
+            
             for (let i = currentLineIndex + 1; i < lines.length; i++) {
                 const currentLine = lines[i];
                 const currentLineStartOffset = file.indexOf(currentLine, currentSearchOffset - currentLine.length -1);
                 const potentialIdMatch = currentLine.trim().match(ankiIdRegex);
+                
+                // If we're inside a callout, check if the current line is still part of it
+                if (isInsideCallout) {
+                    // If line doesn't start with '>' pattern, we're leaving the callout
+                    if (!currentLine.startsWith(calloutIndentation) && currentLine.trim() !== '') {
+                        isInsideCallout = false;
+                    }
+                }
 
                 // Check if the current line is the start of the *next* #card match
                 const isNextCardStart = matches.some((nextMatch, nextMatchIdx) =>
                     nextMatchIdx > matchIndex && nextMatch.index === currentLineStartOffset
                 );
-                // TODO: Also check against other card type regexes (inline, cloze, spaced) for robustness?
 
                 if (potentialIdMatch) {
                     // Found an ID block immediately following the answer.
@@ -592,8 +613,8 @@ export class Parser {
                     inserted = true;
                     endOffset = currentLineStartOffset + currentLine.length; // Include ID line
                     break; // Stop collecting answer
-                } else if (isNextCardStart || currentLine.trim() === '') {
-                     // Found the start of the next card or an empty line, stop collecting answer.
+                } else if (isNextCardStart || (currentLine.trim() === '' && !isInsideCallout)) {
+                     // Found the start of the next card or an empty line (not in callout), stop collecting answer.
                     // End offset remains the end of the *previous* line.
                     break;
                 } else {
@@ -624,8 +645,15 @@ export class Parser {
             }
         }
 
-        question = this.parseLine(question, vault);
-        answer = this.parseLine(answer, vault);
+        // For callouts, ensure we preserve the callout syntax properly
+        if (isCallout) {
+            // Make sure not to modify the original callout syntax during parsing
+            question = this.parseLine(question, vault, true);
+            answer = this.parseLine(answer, vault, true);
+        } else {
+            question = this.parseLine(question, vault);
+            answer = this.parseLine(answer, vault);
+        }
 
         // Create the card object
         const fields: BasicCardFields = { Front: question, Back: answer };
@@ -671,7 +699,7 @@ export class Parser {
     });
   }
 
-  private parseLine(str: string, vaultName: string) {
+  private parseLine(str: string, vaultName: string, isCallout: boolean = false) {
     // Step 1: Substitute images and audio links first
     // substituteImageLinks now generates clean HTML img tags without namespace attributes
     let processedStr = this.substituteImageLinks(this.substituteAudioLinks(str));
@@ -680,6 +708,14 @@ export class Parser {
     processedStr = this.mathToAnki(
         this.substituteObsidianLinks(processedStr, vaultName)
     );
+
+    // For callouts, we need to be extra careful to preserve the callout syntax
+    if (isCallout) {
+      // If we're handling a callout, we need to preserve the callout syntax 
+      // by ensuring the ">" and "[!type]" markers aren't converted 
+      // Sometimes these get wrapped in <p> tags by the converter
+      return processedStr;
+    }
 
     // Step 3: Convert remaining Markdown to HTML using showdown
     let html = this.htmlConverter.makeHtml(processedStr);
@@ -707,31 +743,24 @@ export class Parser {
         embeds.forEach(embed => {
             // Check if preceded by an img tag
             const prevElement = embed.previousElementSibling;
-            if (prevElement && prevElement.tagName.toLowerCase() === 'img') {
-                // Remove the duplicate embed div
-                if (embed.parentNode) {
-                    embed.parentNode.removeChild(embed);
+            if (prevElement && prevElement.tagName === 'IMG') {
+                // Check if image src matches the embed data-src
+                const imgSrc = prevElement.getAttribute('src');
+                const embedSrc = embed.getAttribute('data-src');
+                
+                if (imgSrc && embedSrc && imgSrc.includes(embedSrc)) {
+                    // This is a duplicate, remove the div.internal-embed
+                    embed.parentNode?.removeChild(embed);
                 }
             }
         });
         
-        // Create a new serializer that doesn't rely on innerHTML
-        const serializer = new XMLSerializer();
-        // Serialize each child node and concatenate
-        let cleanedHtml = '';
-        Array.from(container.childNodes).forEach(node => {
-            cleanedHtml += serializer.serializeToString(node);
-        });
+        // Get the cleaned HTML back
+        html = container.innerHTML;
         
-        html = cleanedHtml;
     } catch (e) {
-        // Fallback to regex approach if DOM manipulation fails (e.g., in tests)
-        const cleanupRegex = /(<img [^>]+>)<div class="internal-embed.*?<\/div>/gi;
-        html = html.replace(cleanupRegex, '$1');
-        
-        if (process.env.NODE_ENV !== 'test') {
-            console.warn("DOM cleanup failed, falling back to regex cleanup:", e);
-        }
+        // In test environment or if parsing fails, continue with original HTML
+        console.debug('DOM manipulation skipped or failed:', e);
     }
 
     return html;
