@@ -1,7 +1,7 @@
 {
   "id": "flashcards-v2",
   "name": "Flashcards-v2",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "minAppVersion": "1.4.0",
   "description": "Anki flashcards: Create and sync flashcards (basic, cloze, reversed) with images, audio, LaTeX, and code directly from your notes to Anki for spaced repetition learning.",
   "author": "xRyul",
