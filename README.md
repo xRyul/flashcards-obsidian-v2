@@ -11,12 +11,6 @@ This is a fork of the [Obsidian Flashcards to Anki](https://github.com/reuseman/
 - The plugin now recovers missing Anki IDs by matching card content with existing cards in Anki.
 - Cards are now automatically recreated if they exist in Obsidian but are missing from Anki (e.g., when decks are deleted in Anki)
 - Content inside HTML comments is now ignored for card creation (except for Anki ID comments)
-- **Improved MathJax rendering** with better support for LaTeX in Anki cards
-  - Fixed issue with redundant backslashes around LaTeX content
-  - Uses custom tags to ensure proper rendering in Anki
-- **Enhanced list formatting** that preserves the structure of ordered and unordered lists
-- **Better callout support** for cleaner rendering of callout blocks in Anki
-- Other bug fixes.
 
 ## Features
 

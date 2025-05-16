@@ -103,8 +103,6 @@ This guide helps you diagnose and fix common issues that may occur while using t
 3. Make sure you don't have conflicting Anki add-ons
 4. Re-sync the cards to update the content
 
-> **Note**: The plugin has been updated with improved MathJax rendering support. After updating to the latest version, you'll need to resync your cards to apply the fix. The plugin will attempt to recreate note types with improved rendering support.
-
 ### Lists and Callouts Not Displaying Correctly
 
 **Symptoms:**
