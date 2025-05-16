@@ -27,6 +27,14 @@ export class Parser {
     this.htmlConverter.setOption("ghCodeBlocks", true);
     this.htmlConverter.setOption("requireSpaceBeforeHeadingText", true);
     this.htmlConverter.setOption("simpleLineBreaks", true);
+    // Explicitly enable bold and italic formatting
+    this.htmlConverter.setOption("literalMidWordUnderscores", false);
+    this.htmlConverter.setOption("literalMidWordAsterisks", false);
+    this.htmlConverter.setOption("openLinksInNewWindow", false);
+    this.htmlConverter.setOption("parseImgDimensions", true);
+    this.htmlConverter.setOption("smartIndentationFix", true);
+    // Enable full GitHub Flavored Markdown compatibility
+    this.htmlConverter.setFlavor('github');
   }
 
   public generateFlashcards(
@@ -898,17 +906,27 @@ export class Parser {
             const [__, calloutType, calloutContent] = titleMatch;
             processedLines.push(`<div class="callout ${calloutType.toLowerCase()}"><strong>${calloutContent || calloutType}</strong></div>`);
           } else if (content.trim()) {
-            // Regular content line - convert any markdown lists to HTML
-            if (content.match(/^[-*+]\s+/)) {
+            // Regular content line - first convert Markdown formatting
+            // Handle bold and italic formatting
+            let formattedContent = content
+              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold with **
+              .replace(/__(.*?)__/g, '<strong>$1</strong>')     // Bold with __
+              .replace(/\*(.*?)\*/g, '<em>$1</em>')             // Italic with *
+              .replace(/_(.*?)_/g, '<em>$1</em>');              // Italic with _
+              
+            // Then handle lists
+            if (formattedContent.match(/^[-*+]\s+/)) {
               // This is a list item
-              processedLines.push(`<ul><li>${content.replace(/^[-*+]\s+/, '')}</li></ul>`);
-            } else if (content.match(/^\d+\.\s+/)) {
+              formattedContent = `<ul><li>${formattedContent.replace(/^[-*+]\s+/, '')}</li></ul>`;
+            } else if (formattedContent.match(/^\d+\.\s+/)) {
               // This is a numbered list item
-              processedLines.push(`<ol><li>${content.replace(/^\d+\.\s+/, '')}</li></ol>`);
+              formattedContent = `<ol><li>${formattedContent.replace(/^\d+\.\s+/, '')}</li></ol>`;
             } else {
               // Regular line
-              processedLines.push(`<p>${content}</p>`);
+              formattedContent = `<p>${formattedContent}</p>`;
             }
+            
+            processedLines.push(formattedContent);
           } else {
             // Empty line
             processedLines.push('<br>');

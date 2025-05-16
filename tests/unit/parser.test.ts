@@ -1425,4 +1425,31 @@ Non-matching line
         // Restore original regex
         regex.cardsToDelete = originalRegex;
     });
+
+    // Test markdown formatting conversion
+    it('should correctly convert markdown formatting to HTML', () => {
+        const testCases = [
+            {
+                input: 'This is *italic* text',
+                expected: '<p>This is <em>italic</em> text</p>'
+            },
+            {
+                input: 'This is **bold** text',
+                expected: '<p>This is <strong>bold</strong> text</p>'
+            },
+            {
+                input: 'This is _italic_ text with underscores',
+                expected: '<p>This is <em>italic</em> text with underscores</p>'
+            },
+            {
+                input: 'This is __bold__ text with underscores',
+                expected: '<p>This is <strong>bold</strong> text with underscores</p>'
+            }
+        ];
+
+        for (const testCase of testCases) {
+            const result = parser['parseLine'](testCase.input, 'test-vault');
+            expect(result).toContain(testCase.expected);
+        }
+    });
 }); 
