@@ -572,6 +572,9 @@ export class Parser {
               // Check if the current line is a heading
               const currentLineIsHeading = isHeading(currentLineTrimmed);
 
+              // Check if this line is another list item (starts with - or * or + followed by space)
+              const isListItem = /^[-*+]\s/.test(currentLineTrimmed);
+
               const potentialIdMatch = currentLineTrimmed.match(ankiIdRegex);
 
               // Check if the current line starts *any* kind of card definition
@@ -598,8 +601,8 @@ export class Parser {
                       endOffset = currentLineStartOffset + currentLine.length; // Include ID line offset
                   }
                   break; // Stop collecting answer
-              } else if (currentLineIsHeading || isNextCardStart || currentLineTrimmed === '') {
-                   // Found a heading, the start of the next card, or an empty line, stop collecting answer.
+              } else if (currentLineIsHeading || isNextCardStart || currentLineTrimmed === '' || isListItem) {
+                   // Found a heading, the start of the next card, an empty line, or a new list item - stop collecting answer.
                   break;
               } else if (i > 0 && answerLines.length > 0 && answerLines[answerLines.length - 1].trim().endsWith('$')) {
                   // If the previous line ends with a dollar sign (end of math), and this is not the first line,
