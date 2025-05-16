@@ -47,48 +47,61 @@ export class Anki {
       try {
         await this.invoke("createModel", 6, model);
         modelsUpdated = true;
-        console.log(`Created model ${model.modelName}`);
+        // console.log(`Created model ${model.modelName}`);
       } catch (e) {
         // Model already exists, update it
         try {
+          // Transform cardTemplates array into the object structure expected by Anki Connect
+          const templatesObject: Record<string, {Front: string, Back: string}> = {};
+          for (const template of model.cardTemplates) {
+            templatesObject[template.Name] = {
+              Front: template.Front,
+              Back: template.Back
+            };
+          }
+
           await this.invoke("updateModelTemplates", 6, {
-            model: model.modelName,
-            templates: model.cardTemplates,
+            model: {
+              name: model.modelName,
+              templates: templatesObject
+            }
           });
           modelsUpdated = true;
-          console.log(`Updated templates for model ${model.modelName}`);
+          // console.log(`Updated templates for model ${model.modelName}`);
         } catch (e) {
           console.error(`Failed to update templates for ${model.modelName}`, e);
         }
 
         try {
           await this.invoke("updateModelStyling", 6, {
-            model: model.modelName,
-            css: model.css,
+            model: {
+              name: model.modelName,
+              css: model.css,
+            }
           });
           modelsUpdated = true;
-          console.log(`Updated styling for model ${model.modelName}`);
+          // console.log(`Updated styling for model ${model.modelName}`);
         } catch (e) {
           console.error(`Failed to update styling for ${model.modelName}`, e);
         }
       }
     }
 
-    // If models were updated, display a notification about the improvements
-    if (modelsUpdated) {
-      // Use Notice API from Obsidian to show a notification
-      try {
-        if (typeof Notice !== 'undefined') {
-          new Notice(
-            "MathJax rendering fix applied! You need to: 1) restart Anki, 2) sync your cards again, and 3) check 'Tools > Empty Card Browser Cache' in Anki if formulas still don't render properly.",
-            20000 // Display for 20 seconds
-          );
-        }
-      } catch (e) {
-        // Silently ignore if Notice isn't available
-        console.log("Models updated with improved MathJax rendering support");
-      }
-    }
+    // // If models were updated, display a notification about the improvements
+    // if (modelsUpdated) {
+    //   // Use Notice API from Obsidian to show a notification
+    //   try {
+    //     if (typeof Notice !== 'undefined') {
+    //       new Notice(
+    //         "MathJax rendering fix applied! You need to: 1) restart Anki, 2) sync your cards again, and 3) check 'Tools > Empty Card Browser Cache' in Anki if formulas still don't render properly.",
+    //         20000 // Display for 20 seconds
+    //       );
+    //     }
+    //   } catch (e) {
+    //     // Silently ignore if Notice isn't available
+    //     console.log("Models updated with improved MathJax rendering support");
+    //   }
+    // }
   }
 
   public async createDeck(deckName: string): Promise<any> {

@@ -121,7 +121,7 @@ export class CardsService {
       const cardsToDelete: number[] = this.parser.getCardsToDelete(this.file);
 
       if (cardsNotInAnki) {
-        console.info("Flashcards: Cards not in Anki (maybe deleted)");
+        // console.info("Flashcards: Cards not in Anki (maybe deleted)");
         for (const card of cardsNotInAnki) {
           this.notifications.push(
             `Error: Card with ID ${card.id} is not in Anki!`

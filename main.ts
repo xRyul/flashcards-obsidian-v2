@@ -166,7 +166,7 @@ export default class ObsidianFlashcard extends Plugin {
 			for (const r of res) {
 				new Notice(r, noticeTimeout)
 			}
-			console.log(res)
+			// console.log(res)
 		}).catch(err => {
 			Error(err)
 		})
